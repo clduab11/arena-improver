@@ -63,11 +63,12 @@ jobs:
 
       - name: Check if Claude review requested
         id: check_trigger
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body || '' }}
         run: |
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             echo "auto_review=true" >> $GITHUB_OUTPUT
           else
-            COMMENT_BODY="${{ github.event.comment.body }}"
             if echo "$COMMENT_BODY" | grep -iq "@claude"; then
               echo "auto_review=true" >> $GITHUB_OUTPUT
             else
