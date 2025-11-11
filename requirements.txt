@@ -1,0 +1,29 @@
+# Core dependencies
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+pydantic==2.10.3
+python-multipart==0.0.19
+
+# MCP Protocol
+mcp==1.1.2
+
+# Data processing
+pandas==2.2.3
+numpy==2.2.1
+
+# Database
+sqlalchemy==2.0.36
+aiosqlite==0.20.0
+
+# AI/ML
+openai==1.57.2
+sentence-transformers==3.3.1
+torch==2.5.1
+
+# Testing
+pytest==8.3.4
+pytest-asyncio==0.24.0
+httpx==0.28.1
+
+# Utilities
+python-dotenv==1.0.1

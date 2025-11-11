@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "arena-improver"
+version = "0.1.0"
+description = "MCP for Magic: The Gathering Arena deck analysis and optimization"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [
+    {name = "clduab11"}
+]
+dependencies = [
+    "fastapi>=0.115.5",
+    "uvicorn[standard]>=0.32.1",
+    "pydantic>=2.10.3",
+    "python-multipart>=0.0.19",
+    "mcp>=1.1.2",
+    "pandas>=2.2.3",
+    "numpy>=2.2.1",
+    "sqlalchemy>=2.0.36",
+    "aiosqlite>=0.20.0",
+    "openai>=1.57.2",
+    "sentence-transformers>=3.3.1",
+    "torch>=2.5.1",
+    "python-dotenv>=1.0.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.4",
+    "pytest-asyncio>=0.24.0",
+    "httpx>=0.28.1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

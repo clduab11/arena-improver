@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  arena-improver:
+    build: .
+    ports:
+      - "8000:8000"
+      - "8001:8001"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - VULTR_API_KEY=${VULTR_API_KEY}
+      - DATABASE_URL=sqlite:///./data/arena_improver.db
+    restart: unless-stopped

@@ -1,0 +1,53 @@
+"""Integration tests for FastAPI endpoints."""
+
+import pytest
+from httpx import AsyncClient, ASGITransport
+
+
+@pytest.mark.asyncio
+async def test_health_check(initialized_app):
+    """Test health check endpoint."""
+    transport = ASGITransport(app=initialized_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/api/v1/health")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "healthy"
+
+
+@pytest.mark.asyncio
+async def test_upload_deck_text(initialized_app):
+    """Test deck upload via text."""
+    deck_string = """4 Lightning Bolt (M11) 146
+20 Mountain (ZNR) 381"""
+    
+    transport = ASGITransport(app=initialized_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/upload/text",
+            json={"deck_string": deck_string, "format": "Standard"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "success"
+        assert "deck_id" in data
+
+
+@pytest.mark.asyncio
+async def test_list_decks(initialized_app):
+    """Test listing decks."""
+    transport = ASGITransport(app=initialized_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/api/v1/decks")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)
+
+
+@pytest.mark.asyncio
+async def test_analyze_deck_not_found(initialized_app):
+    """Test analyzing non-existent deck."""
+    transport = ASGITransport(app=initialized_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post("/api/v1/analyze/99999")
+        assert response.status_code == 404

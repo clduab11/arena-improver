@@ -1,0 +1,286 @@
+"""Core deck analysis service."""
+
+from typing import List, Dict
+import statistics
+
+from ..models.deck import (
+    Deck, Card, DeckAnalysis, ManaCurve, CardSynergy,
+    MetaMatchup
+)
+
+
+class DeckAnalyzer:
+    """Analyzes MTG Arena decks for optimization opportunities."""
+    
+    def __init__(self):
+        self.meta_archetypes = self._load_meta_archetypes()
+    
+    def analyze_deck(self, deck: Deck) -> DeckAnalysis:
+        """Perform comprehensive deck analysis."""
+        mana_curve = self._analyze_mana_curve(deck)
+        color_dist = self._analyze_color_distribution(deck)
+        card_types = self._analyze_card_types(deck)
+        synergies = self._find_synergies(deck)
+        matchups = self._analyze_meta_matchups(deck)
+        strengths, weaknesses = self._identify_strengths_weaknesses(
+            deck, mana_curve, color_dist, card_types
+        )
+        overall_score = self._calculate_overall_score(
+            mana_curve, color_dist, card_types, synergies
+        )
+        
+        return DeckAnalysis(
+            deck_name=deck.name,
+            mana_curve=mana_curve,
+            color_distribution=color_dist,
+            card_types=card_types,
+            synergies=synergies,
+            meta_matchups=matchups,
+            strengths=strengths,
+            weaknesses=weaknesses,
+            overall_score=overall_score
+        )
+    
+    def _analyze_mana_curve(self, deck: Deck) -> ManaCurve:
+        """Analyze the mana curve of the deck."""
+        distribution = {}
+        cmc_values = []
+        
+        for card in deck.mainboard:
+            if card.card_type.lower() != 'land':
+                cmc = int(card.cmc)
+                # Cap at 7+ for curve analysis
+                cmc_key = min(cmc, 7)
+                distribution[cmc_key] = distribution.get(cmc_key, 0) + card.quantity
+                cmc_values.extend([card.cmc] * card.quantity)
+        
+        avg_cmc = statistics.mean(cmc_values) if cmc_values else 0.0
+        median_cmc = statistics.median(cmc_values) if cmc_values else 0.0
+        
+        # Calculate curve score (ideal curve has most cards at 2-3 CMC)
+        curve_score = self._score_mana_curve(distribution)
+        
+        return ManaCurve(
+            distribution=distribution,
+            average_cmc=round(avg_cmc, 2),
+            median_cmc=median_cmc,
+            curve_score=curve_score
+        )
+    
+    def _score_mana_curve(self, distribution: Dict[int, int]) -> float:
+        """Score the mana curve (0-100)."""
+        # Ideal distribution weights
+        ideal = {0: 0, 1: 8, 2: 12, 3: 10, 4: 6, 5: 3, 6: 2, 7: 1}
+        total_nonland = sum(distribution.values())
+        
+        if total_nonland == 0:
+            return 0.0
+        
+        score = 100.0
+        for cmc, ideal_count in ideal.items():
+            actual_count = distribution.get(cmc, 0)
+            actual_pct = (actual_count / total_nonland) * 100
+            ideal_pct = (ideal_count / sum(ideal.values())) * 100
+            
+            # Penalize deviation from ideal
+            deviation = abs(actual_pct - ideal_pct)
+            score -= deviation * 0.5
+        
+        return max(0.0, min(100.0, score))
+    
+    def _analyze_color_distribution(self, deck: Deck) -> Dict[str, int]:
+        """Analyze color distribution in the deck."""
+        color_count = {'W': 0, 'U': 0, 'B': 0, 'R': 0, 'G': 0, 'C': 0}
+        
+        for card in deck.mainboard:
+            if card.card_type.lower() != 'land':
+                for color in card.colors:
+                    if color in color_count:
+                        color_count[color] += card.quantity
+        
+        # Remove colors with 0 count
+        return {k: v for k, v in color_count.items() if v > 0}
+    
+    def _analyze_card_types(self, deck: Deck) -> Dict[str, int]:
+        """Analyze distribution of card types."""
+        type_count = {}
+        
+        for card in deck.mainboard:
+            card_type = card.card_type
+            type_count[card_type] = type_count.get(card_type, 0) + card.quantity
+        
+        return type_count
+    
+    def _find_synergies(self, deck: Deck) -> List[CardSynergy]:
+        """Identify card synergies in the deck."""
+        synergies = []
+        
+        # Simplified synergy detection
+        cards = deck.mainboard
+        card_names = [card.name for card in cards]
+        
+        # Example synergy rules (would be more sophisticated in production)
+        for i, card1 in enumerate(cards):
+            for card2 in cards[i+1:]:
+                synergy = self._check_synergy(card1, card2)
+                if synergy:
+                    synergies.append(synergy)
+        
+        return synergies[:10]  # Limit to top 10
+    
+    def _check_synergy(self, card1: Card, card2: Card) -> CardSynergy:
+        """Check if two cards have synergy."""
+        # Simplified - would use ML or rules engine in production
+        
+        # Example: creatures and equipment
+        if 'creature' in card1.card_type.lower() and 'equipment' in card2.card_type.lower():
+            return CardSynergy(
+                card1=card1.name,
+                card2=card2.name,
+                synergy_type="support",
+                strength=60.0,
+                explanation="Equipment enhances creature effectiveness"
+            )
+        
+        return None
+    
+    def _analyze_meta_matchups(self, deck: Deck) -> List[MetaMatchup]:
+        """Analyze matchups against meta archetypes."""
+        matchups = []
+        
+        for archetype in self.meta_archetypes:
+            win_rate = self._estimate_matchup_winrate(deck, archetype)
+            favorable = win_rate >= 50.0
+            
+            matchup = MetaMatchup(
+                archetype=archetype['name'],
+                win_rate=win_rate,
+                favorable=favorable,
+                key_cards=archetype.get('key_cards', []),
+                sideboard_suggestions=[]
+            )
+            matchups.append(matchup)
+        
+        return matchups
+    
+    def _estimate_matchup_winrate(self, deck: Deck, archetype: Dict) -> float:
+        """Estimate win rate against an archetype (simplified)."""
+        # Simplified - would use historical data and ML in production
+        base_rate = 50.0
+        
+        # Adjust based on color matchup
+        if archetype['type'] == 'aggro':
+            # More removal and lifegain helps
+            removal_count = sum(
+                card.quantity for card in deck.mainboard 
+                if 'destroy' in card.name.lower() or 'remove' in card.name.lower()
+            )
+            base_rate += min(removal_count * 2, 15)
+        
+        return min(100.0, max(0.0, base_rate))
+    
+    def _identify_strengths_weaknesses(
+        self, deck: Deck, mana_curve: ManaCurve, 
+        color_dist: Dict[str, int], card_types: Dict[str, int]
+    ) -> tuple[List[str], List[str]]:
+        """Identify deck strengths and weaknesses."""
+        strengths = []
+        weaknesses = []
+        
+        # Mana curve analysis
+        if mana_curve.curve_score >= 70:
+            strengths.append("Well-balanced mana curve")
+        elif mana_curve.curve_score < 50:
+            weaknesses.append("Mana curve needs improvement")
+        
+        if mana_curve.average_cmc < 2.5:
+            strengths.append("Fast, aggressive curve")
+        elif mana_curve.average_cmc > 4.0:
+            strengths.append("Late-game oriented strategy")
+        
+        # Color distribution
+        num_colors = len(color_dist)
+        if num_colors == 1:
+            strengths.append("Mono-colored for consistent mana")
+        elif num_colors >= 3:
+            weaknesses.append("Multi-color may have mana consistency issues")
+        
+        # Card type balance
+        creature_count = card_types.get('Creature', 0)
+        total_nonland = sum(card_types.get(t, 0) for t in card_types if t != 'Land')
+        
+        if total_nonland > 0:
+            creature_ratio = creature_count / total_nonland
+            if 0.3 <= creature_ratio <= 0.5:
+                strengths.append("Good creature-to-spell ratio")
+            elif creature_ratio < 0.2:
+                weaknesses.append("May lack creature presence")
+            elif creature_ratio > 0.7:
+                weaknesses.append("Heavy creature focus may be vulnerable")
+        
+        return strengths, weaknesses
+    
+    def _calculate_overall_score(
+        self, mana_curve: ManaCurve, color_dist: Dict[str, int],
+        card_types: Dict[str, int], synergies: List[CardSynergy]
+    ) -> float:
+        """Calculate overall deck score (0-100)."""
+        # Weighted scoring
+        curve_weight = 0.35
+        color_weight = 0.15
+        balance_weight = 0.25
+        synergy_weight = 0.25
+        
+        # Mana curve score
+        curve_score = mana_curve.curve_score
+        
+        # Color consistency score
+        num_colors = len(color_dist)
+        color_score = 100 - (num_colors - 1) * 15  # Penalize each additional color
+        color_score = max(0, min(100, color_score))
+        
+        # Card type balance score
+        total_nonland = sum(card_types.get(t, 0) for t in card_types if t != 'Land')
+        creature_count = card_types.get('Creature', 0)
+        if total_nonland > 0:
+            creature_ratio = creature_count / total_nonland
+            # Ideal ratio around 0.4
+            balance_score = 100 - abs(creature_ratio - 0.4) * 100
+        else:
+            balance_score = 0
+        
+        # Synergy score
+        avg_synergy = (
+            statistics.mean([s.strength for s in synergies]) 
+            if synergies else 50
+        )
+        
+        # Calculate weighted total
+        overall = (
+            curve_score * curve_weight +
+            color_score * color_weight +
+            balance_score * balance_weight +
+            avg_synergy * synergy_weight
+        )
+        
+        return round(overall, 2)
+    
+    def _load_meta_archetypes(self) -> List[Dict]:
+        """Load current meta archetypes (simplified)."""
+        return [
+            {
+                'name': 'Mono-Red Aggro',
+                'type': 'aggro',
+                'key_cards': ['Lightning Bolt', 'Monastery Swiftspear']
+            },
+            {
+                'name': 'Azorius Control',
+                'type': 'control',
+                'key_cards': ['Counterspell', 'Wrath of God']
+            },
+            {
+                'name': 'Rakdos Midrange',
+                'type': 'midrange',
+                'key_cards': ['Thoughtseize', 'Bonecrusher Giant']
+            }
+        ]

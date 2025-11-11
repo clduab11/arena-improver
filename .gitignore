@@ -205,3 +205,9 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Arena Improver specific
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
