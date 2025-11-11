@@ -52,9 +52,13 @@ async def root():
 
 
 if __name__ == "__main__":
+    import os
+    # Note: 0.0.0.0 binds to all interfaces for Docker/production use
+    # Use 127.0.0.1 for local development to restrict access
+    host = os.getenv("API_HOST", "127.0.0.1")
     uvicorn.run(
         "src.main:app",
-        host="0.0.0.0",
+        host=host,
         port=8000,
         reload=True
     )

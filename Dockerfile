@@ -20,6 +20,9 @@ COPY . .
 # Create data directory for SQLite
 RUN mkdir -p /app/data
 
+# Set API host for Docker (binds to all interfaces)
+ENV API_HOST=0.0.0.0
+
 # Expose FastAPI port
 EXPOSE 8000
 
