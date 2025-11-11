@@ -34,12 +34,25 @@ class ClaudeReviewer:
     """Automated code reviewer using Claude AI."""
 
     # Resource limits
-    MAX_DIFF_SIZE = 50000  # characters
-    MAX_FILES = 50
-    MAX_FILE_DIFF_SIZE = 5000  # characters per file
+    MAX_DIFF_SIZE = 50000  # ~50KB - balanced for API limits and context window
+    MAX_FILES = 50  # Prevent overwhelming the AI model with too many files
+    MAX_FILE_DIFF_SIZE = 5000  # Per-file limit to keep individual diffs manageable
 
     def __init__(self, api_key: str, github_token: str) -> None:
-        """Initialize the reviewer with API credentials."""
+        """Initialize the reviewer with API credentials.
+        
+        Args:
+            api_key: Anthropic API key (must start with 'sk-ant-')
+            github_token: GitHub personal access token
+            
+        Raises:
+            ValueError: If API key or GitHub token is invalid
+        """
+        if not api_key or not api_key.startswith('sk-ant-'):
+            raise ValueError("Invalid or missing Claude API key")
+        if not github_token:
+            raise ValueError("Invalid or missing GitHub token")
+        
         self.client = anthropic.Anthropic(api_key=api_key)
         self.github = Github(github_token)
         self.model = self._load_model_from_config()
@@ -53,9 +66,17 @@ class ClaudeReviewer:
             if os.path.exists(config_path):
                 with open(config_path, 'r') as f:
                     config = yaml.safe_load(f)
-                    return config.get('model', {}).get('name', default_model)
+                    model = config.get('model', {}).get('name', default_model)
+                    if not model or not isinstance(model, str):
+                        print(f"Warning: Invalid model name in config, using default")
+                        return default_model
+                    return model
+        except yaml.YAMLError as e:
+            print(f"Warning: YAML parsing error in config: {e}")
+        except (IOError, OSError) as e:
+            print(f"Warning: Could not read config file: {e}")
         except Exception as e:
-            print(f"Warning: Could not load model from config: {e}")
+            print(f"Warning: Unexpected error loading config: {e}")
         
         return default_model
 

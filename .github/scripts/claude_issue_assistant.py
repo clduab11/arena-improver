@@ -7,6 +7,7 @@ for GitHub issues.
 """
 
 import argparse
+import html
 import json
 import os
 import re
@@ -35,15 +36,28 @@ class ClaudeIssueAssistant:
     """Automated issue assistant using Claude AI."""
 
     # Constants for limits
-    MAX_SIMILAR_ISSUES = 5
-    MAX_RECENT_COMMENTS = 5
-    MAX_TITLE_LENGTH_FOR_SEARCH = 50
-    MAX_ISSUE_BODY_LENGTH = 1000
-    MAX_CODE_FILES = 3
-    MAX_CODE_SNIPPET_LENGTH = 1000
+    MAX_SIMILAR_ISSUES = 5  # Limit similar issues to avoid overwhelming context
+    MAX_RECENT_COMMENTS = 5  # Balance context vs. prompt size
+    MAX_TITLE_LENGTH_FOR_SEARCH = 50  # GitHub search API limitations
+    MAX_ISSUE_BODY_LENGTH = 1000  # Prevent excessive prompt size from issue content
+    MAX_CODE_FILES = 3  # Limit file fetching to avoid rate limits
+    MAX_CODE_SNIPPET_LENGTH = 1000  # Keep code context focused and relevant
 
     def __init__(self, api_key: str, github_token: str) -> None:
-        """Initialize the assistant with API credentials."""
+        """Initialize the assistant with API credentials.
+        
+        Args:
+            api_key: Anthropic API key (must start with 'sk-ant-')
+            github_token: GitHub personal access token
+            
+        Raises:
+            ValueError: If API key or GitHub token is invalid
+        """
+        if not api_key or not api_key.startswith('sk-ant-'):
+            raise ValueError("Invalid or missing Claude API key")
+        if not github_token:
+            raise ValueError("Invalid or missing GitHub token")
+        
         self.client = anthropic.Anthropic(api_key=api_key)
         self.github = Github(github_token)
         self.model = self._load_model_from_config()
@@ -57,9 +71,17 @@ class ClaudeIssueAssistant:
             if os.path.exists(config_path):
                 with open(config_path, 'r') as f:
                     config = yaml.safe_load(f)
-                    return config.get('model', {}).get('name', default_model)
+                    model = config.get('model', {}).get('name', default_model)
+                    if not model or not isinstance(model, str):
+                        print(f"Warning: Invalid model name in config, using default")
+                        return default_model
+                    return model
+        except yaml.YAMLError as e:
+            print(f"Warning: YAML parsing error in config: {e}")
+        except (IOError, OSError) as e:
+            print(f"Warning: Could not read config file: {e}")
         except Exception as e:
-            print(f"Warning: Could not load model from config: {e}")
+            print(f"Warning: Unexpected error loading config: {e}")
         
         return default_model
 
@@ -98,10 +120,14 @@ class ClaudeIssueAssistant:
         # Get labels
         labels = [label.name for label in issue.labels]
 
+        # Sanitize issue body to prevent injection attacks
+        raw_body = issue.body or ""
+        sanitized_body = html.escape(raw_body[:self.MAX_ISSUE_BODY_LENGTH])
+        
         return {
             "number": issue.number,
             "title": issue.title,
-            "body": issue.body or "",
+            "body": sanitized_body,
             "author": issue.user.login,
             "state": issue.state,
             "labels": labels,
