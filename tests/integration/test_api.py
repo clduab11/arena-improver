@@ -51,3 +51,39 @@ async def test_analyze_deck_not_found(initialized_app):
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post("/api/v1/analyze/99999")
         assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_record_performance_validation(initialized_app):
+    """Test performance endpoint with validation."""
+    transport = ASGITransport(app=initialized_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Test with invalid result value
+        response = await client.post(
+            "/api/v1/performance/1",
+            json={
+                "opponent_archetype": "Test Deck",
+                "result": "invalid_result",
+                "games_won": 2,
+                "games_lost": 1
+            }
+        )
+        assert response.status_code == 400
+        assert "Invalid result value" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_record_performance_not_found(initialized_app):
+    """Test recording performance for non-existent deck."""
+    transport = ASGITransport(app=initialized_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/performance/99999",
+            json={
+                "opponent_archetype": "Test Deck",
+                "result": "win",
+                "games_won": 2,
+                "games_lost": 1
+            }
+        )
+        assert response.status_code == 404

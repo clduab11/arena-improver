@@ -36,6 +36,26 @@ class OptimizationResponse(BaseModel):
     confidence: float
 
 
+class PerformanceRecordRequest(BaseModel):
+    """Request model for recording match performance."""
+    opponent_archetype: str
+    result: str  # Must be 'win', 'loss', or 'draw'
+    games_won: int
+    games_lost: int
+    notes: str = ""
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "opponent_archetype": "Mono-Red Aggro",
+                "result": "win",
+                "games_won": 2,
+                "games_lost": 1,
+                "notes": "Good sideboard choices"
+            }
+        }
+
+
 @router.post("/upload/csv", response_model=dict)
 async def upload_deck_csv(file: UploadFile = File(...)):
     """
@@ -170,13 +190,17 @@ async def get_deck_stats(deck_id: int):
 @router.post("/performance/{deck_id}", response_model=dict)
 async def record_performance(
     deck_id: int,
-    opponent_archetype: str,
-    result: str,
-    games_won: int,
-    games_lost: int,
-    notes: str = ""
+    performance: PerformanceRecordRequest
 ):
     """Record a match performance for a deck."""
+    # Validate result value
+    valid_results = {"win", "loss", "draw"}
+    if performance.result not in valid_results:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid result value. Must be one of: {', '.join(valid_results)}"
+        )
+    
     # Verify deck exists
     deck = await sql_service.get_deck(deck_id)
     if not deck:
@@ -185,11 +209,11 @@ async def record_performance(
     # Record performance
     await sql_service.record_performance(
         deck_id=deck_id,
-        opponent_archetype=opponent_archetype,
-        result=result,
-        games_won=games_won,
-        games_lost=games_lost,
-        notes=notes
+        opponent_archetype=performance.opponent_archetype,
+        result=performance.result,
+        games_won=performance.games_won,
+        games_lost=performance.games_lost,
+        notes=performance.notes
     )
     
     return {

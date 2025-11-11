@@ -48,6 +48,10 @@ def parse_deck_string(deck_string: str) -> Deck:
                 
                 # Determine card type and mana cost (simplified - would need card database)
                 card_type = determine_card_type(card_name)
+                # WARNING: Text format parsing limitation - mana cost is not available
+                # This will result in CMC=0 and no colors for all non-land cards,
+                # which significantly affects deck analysis accuracy.
+                # Use CSV format for accurate mana curve and color analysis.
                 mana_cost = ""  # Would need card database lookup
                 
                 card = Card(

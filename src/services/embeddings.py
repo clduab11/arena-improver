@@ -53,15 +53,19 @@ class EmbeddingsService:
         # Generate embedding for target card
         target_embedding = self.generate_card_embedding(card)
         
-        # Generate embeddings for candidates
+        # Filter out the target card from candidates
+        candidates = [c for c in candidate_cards if c.name != card.name]
+        
+        if not candidates:
+            return []
+        
+        # Generate embeddings for all candidates in batch for better performance
+        candidate_embeddings = self._generate_batch_embeddings(candidates)
+        
+        # Calculate similarities
         similarities = []
-        for candidate in candidate_cards:
-            if candidate.name == card.name:
-                continue  # Skip same card
-            
-            candidate_embedding = self.generate_card_embedding(candidate)
+        for candidate, candidate_embedding in zip(candidates, candidate_embeddings):
             similarity = self._cosine_similarity(target_embedding, candidate_embedding)
-            
             similarities.append({
                 'card': candidate,
                 'similarity': float(similarity)
@@ -100,15 +104,14 @@ class EmbeddingsService:
         self, deck1: List[Card], deck2: List[Card]
     ) -> float:
         """Calculate overall similarity between two decks."""
-        # Generate deck embeddings (average of card embeddings)
-        deck1_embeddings = [
-            self.generate_card_embedding(card) for card in deck1
-        ]
-        deck2_embeddings = [
-            self.generate_card_embedding(card) for card in deck2
-        ]
+        if not deck1 or not deck2:
+            return 0.0
         
-        if not deck1_embeddings or not deck2_embeddings:
+        # Generate deck embeddings using batch processing for better performance
+        deck1_embeddings = self._generate_batch_embeddings(deck1)
+        deck2_embeddings = self._generate_batch_embeddings(deck2)
+        
+        if deck1_embeddings.size == 0 or deck2_embeddings.size == 0:
             return 0.0
         
         # Average embeddings
@@ -119,6 +122,41 @@ class EmbeddingsService:
         similarity = self._cosine_similarity(deck1_avg, deck2_avg)
         
         return float(similarity)
+    
+    def _generate_batch_embeddings(self, cards: List[Card]) -> np.ndarray:
+        """Generate embeddings for multiple cards in batch for better performance."""
+        if not cards:
+            return np.array([])
+        
+        # Convert all cards to text descriptions
+        card_texts = [self._card_to_text(card) for card in cards]
+        
+        # Check cache for already computed embeddings
+        uncached_indices = []
+        uncached_texts = []
+        embeddings = []
+        
+        for i, text in enumerate(card_texts):
+            if text in self._embeddings_cache:
+                embeddings.append(self._embeddings_cache[text])
+            else:
+                uncached_indices.append(i)
+                uncached_texts.append(text)
+        
+        # Batch generate embeddings for uncached cards
+        if uncached_texts:
+            self._load_model()
+            new_embeddings = self.model.encode(uncached_texts, convert_to_numpy=True)
+            
+            # Cache the new embeddings
+            for text, embedding in zip(uncached_texts, new_embeddings):
+                self._embeddings_cache[text] = embedding
+            
+            # Insert new embeddings in correct positions
+            for idx, embedding in zip(uncached_indices, new_embeddings):
+                embeddings.insert(idx, embedding)
+        
+        return np.array(embeddings)
     
     def _card_to_text(self, card: Card) -> str:
         """Convert card to text description for embedding."""
