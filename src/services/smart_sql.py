@@ -13,6 +13,7 @@ class SmartSQLService:
     """Service for intelligent deck storage and querying."""
     
     def __init__(self, database_url: str = "sqlite+aiosqlite:///./data/arena_improver.db"):
+        self.database_url = database_url
         self.engine = create_async_engine(database_url, echo=False)
         self.SessionLocal = async_sessionmaker(
             self.engine, class_=AsyncSession, expire_on_commit=False
@@ -20,6 +21,19 @@ class SmartSQLService:
     
     async def init_db(self):
         """Initialize database tables."""
+        # Ensure the directory exists for SQLite database
+        if self.database_url.startswith("sqlite"):
+            import os
+            from pathlib import Path
+            
+            # Extract the file path from the database URL
+            # Format: sqlite+aiosqlite:///./data/arena_improver.db
+            db_path = self.database_url.split("///", 1)[-1]
+            db_dir = os.path.dirname(db_path)
+            
+            if db_dir and db_dir not in [".", ""]:
+                Path(db_dir).mkdir(parents=True, exist_ok=True)
+        
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
     
