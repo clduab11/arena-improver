@@ -60,7 +60,7 @@ lint: ## Run all linters
 	@echo "Running Bandit security linter..."
 	bandit -r . -c pyproject.toml
 	@echo "Running Pylint..."
-	pylint arena_improver/ || true
+	@if [ -d src ]; then pylint src/; else echo "Warning: src/ directory not found, skipping pylint."; fi
 
 .PHONY: lint-fix
 lint-fix: ## Run linters with auto-fix
