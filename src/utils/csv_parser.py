@@ -34,26 +34,32 @@ def parse_deck_string(deck_string: str) -> Deck:
             continue
         
         # Parse card line: "4 Card Name (SET) 123"
-        match = re.match(r'^(\d+)\s+(.+?)\s+\(([A-Z0-9]+)\)\s+(\d+)', line)
-        if match:
-            quantity = int(match.group(1))
-            card_name = match.group(2).strip()
-            set_code = match.group(3)
-            
-            # Determine card type and mana cost (simplified - would need card database)
-            card_type = determine_card_type(card_name)
-            mana_cost = ""  # Would need card database lookup
-            
-            card = Card(
-                name=card_name,
-                quantity=quantity,
-                card_type=card_type,
-                mana_cost=mana_cost,
-                cmc=calculate_cmc(mana_cost),
-                colors=extract_colors(mana_cost),
-                set_code=set_code
-            )
-            current_section.append(card)
+        # Split by parentheses to avoid ReDoS vulnerability
+        paren_match = re.search(r'\(([A-Z0-9]+)\)\s+(\d+)$', line)
+        if paren_match:
+            # Extract quantity and name from beginning
+            prefix = line[:paren_match.start()].strip()
+            # Use simple split to avoid ReDoS
+            parts = prefix.split(None, 1)  # Split on first whitespace
+            if len(parts) == 2 and parts[0].isdigit():
+                quantity = int(parts[0])
+                card_name = parts[1].strip()
+                set_code = paren_match.group(1)
+                
+                # Determine card type and mana cost (simplified - would need card database)
+                card_type = determine_card_type(card_name)
+                mana_cost = ""  # Would need card database lookup
+                
+                card = Card(
+                    name=card_name,
+                    quantity=quantity,
+                    card_type=card_type,
+                    mana_cost=mana_cost,
+                    cmc=calculate_cmc(mana_cost),
+                    colors=extract_colors(mana_cost),
+                    set_code=set_code
+                )
+                current_section.append(card)
     
     return Deck(
         name="Imported Deck",
