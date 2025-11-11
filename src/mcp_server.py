@@ -61,11 +61,11 @@ async def handle_analyze_deck(arguments: dict) -> list[TextContent]:
     """Handle analyze_deck tool call."""
     deck_id = arguments["deck_id"]
     deck = await sql_service.get_deck(deck_id)
-    
+
     if not deck:
         return [TextContent(type="text", text=f"Deck {deck_id} not found")]
-    
-    analysis = analyzer.analyze_deck(deck)
+
+    analysis = await analyzer.analyze_deck(deck)
     
     result = f"""Deck Analysis for '{deck.name}'
 ==========================================
@@ -100,11 +100,11 @@ async def handle_optimize_deck(arguments: dict) -> list[TextContent]:
     """Handle optimize_deck tool call."""
     deck_id = arguments["deck_id"]
     deck = await sql_service.get_deck(deck_id)
-    
+
     if not deck:
         return [TextContent(type="text", text=f"Deck {deck_id} not found")]
-    
-    analysis = analyzer.analyze_deck(deck)
+
+    analysis = await analyzer.analyze_deck(deck)
     suggestions = await inference_service.generate_suggestions(deck, analysis)
     prediction = await inference_service.predict_win_rate(deck, suggestions)
     

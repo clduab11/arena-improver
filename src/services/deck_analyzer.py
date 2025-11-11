@@ -1,34 +1,36 @@
 """Core deck analysis service."""
 
-from typing import List, Dict
+from typing import List, Dict, Optional
 import statistics
 
 from ..models.deck import (
     Deck, Card, DeckAnalysis, ManaCurve, CardSynergy,
     MetaMatchup
 )
+from .meta_intelligence import MetaIntelligenceService
 
 
 class DeckAnalyzer:
     """Analyzes MTG Arena decks for optimization opportunities."""
+
+    def __init__(self, meta_service: Optional[MetaIntelligenceService] = None):
+        self.meta_service = meta_service or MetaIntelligenceService()
+        self.meta_archetypes = []  # Will be loaded dynamically
     
-    def __init__(self):
-        self.meta_archetypes = self._load_meta_archetypes()
-    
-    def analyze_deck(self, deck: Deck) -> DeckAnalysis:
+    async def analyze_deck(self, deck: Deck) -> DeckAnalysis:
         """Perform comprehensive deck analysis."""
         mana_curve = self._analyze_mana_curve(deck)
         color_dist = self._analyze_color_distribution(deck)
         card_types = self._analyze_card_types(deck)
         synergies = self._find_synergies(deck)
-        matchups = self._analyze_meta_matchups(deck)
+        matchups = await self._analyze_meta_matchups(deck)
         strengths, weaknesses = self._identify_strengths_weaknesses(
             deck, mana_curve, color_dist, card_types
         )
         overall_score = self._calculate_overall_score(
             mana_curve, color_dist, card_types, synergies
         )
-        
+
         return DeckAnalysis(
             deck_name=deck.name,
             mana_curve=mana_curve,
@@ -144,40 +146,117 @@ class DeckAnalyzer:
         
         return None
     
-    def _analyze_meta_matchups(self, deck: Deck) -> List[MetaMatchup]:
-        """Analyze matchups against meta archetypes."""
+    async def _analyze_meta_matchups(self, deck: Deck) -> List[MetaMatchup]:
+        """Analyze matchups against meta archetypes using real-time meta data."""
         matchups = []
-        
-        for archetype in self.meta_archetypes:
-            win_rate = self._estimate_matchup_winrate(deck, archetype)
-            favorable = win_rate >= 50.0
-            
-            matchup = MetaMatchup(
-                archetype=archetype['name'],
-                win_rate=win_rate,
-                favorable=favorable,
-                key_cards=archetype.get('key_cards', []),
-                sideboard_suggestions=[]
-            )
-            matchups.append(matchup)
-        
+
+        # Fetch current meta data
+        try:
+            meta_snapshot = await self.meta_service.get_current_meta(deck.format)
+
+            for archetype in meta_snapshot.archetypes:
+                win_rate = self._estimate_matchup_winrate_enhanced(deck, archetype)
+                favorable = win_rate >= 50.0
+
+                matchup = MetaMatchup(
+                    archetype=archetype.name,
+                    win_rate=win_rate,
+                    favorable=favorable,
+                    key_cards=archetype.key_cards[:5],  # Top 5 key cards
+                    sideboard_suggestions=[]
+                )
+                matchups.append(matchup)
+        except Exception as e:
+            # Fallback to basic analysis if meta fetch fails
+            print(f"Warning: Could not fetch meta data: {e}")
+            # Return empty or use fallback heuristics
+            pass
+
         return matchups
     
-    def _estimate_matchup_winrate(self, deck: Deck, archetype: Dict) -> float:
-        """Estimate win rate against an archetype (simplified)."""
+    def _estimate_matchup_winrate_enhanced(self, deck: Deck, archetype) -> float:
+        """Estimate win rate against an archetype using enhanced heuristics.
+
+        Args:
+            deck: The player's deck
+            archetype: MetaArchetype object from meta_intelligence
+        """
         # Simplified - would use historical data and ML in production
         base_rate = 50.0
-        
-        # Adjust based on color matchup
-        if archetype['type'] == 'aggro':
-            # More removal and lifegain helps
+
+        # Identify deck strategy type based on mana curve and card types
+        avg_cmc = sum(card.cmc * card.quantity for card in deck.mainboard
+                     if card.card_type.lower() != 'land') / max(1, sum(
+                         card.quantity for card in deck.mainboard
+                         if card.card_type.lower() != 'land'))
+
+        deck_strategy = self._identify_deck_strategy(deck, avg_cmc)
+
+        # Strategy-based matchup matrix
+        matchup_adjustments = {
+            'aggro': {
+                'aggro': 0,
+                'midrange': -5,
+                'control': +10,
+                'combo': 0
+            },
+            'midrange': {
+                'aggro': +5,
+                'midrange': 0,
+                'control': -5,
+                'combo': +5
+            },
+            'control': {
+                'aggro': -10,
+                'midrange': +5,
+                'control': 0,
+                'combo': -5
+            }
+        }
+
+        adjustment = matchup_adjustments.get(deck_strategy, {}).get(
+            archetype.strategy_type, 0
+        )
+        base_rate += adjustment
+
+        # Adjust based on specific cards
+        if archetype.strategy_type == 'aggro':
+            # More removal and lifegain helps against aggro
             removal_count = sum(
-                card.quantity for card in deck.mainboard 
-                if 'destroy' in card.name.lower() or 'remove' in card.name.lower()
+                card.quantity for card in deck.mainboard
+                if any(word in card.name.lower()
+                      for word in ['destroy', 'removal', 'wrath', 'exile', 'kill'])
             )
-            base_rate += min(removal_count * 2, 15)
-        
+            base_rate += min(removal_count * 1.5, 10)
+
         return min(100.0, max(0.0, base_rate))
+
+    def _identify_deck_strategy(self, deck: Deck, avg_cmc: float) -> str:
+        """Identify deck strategy type based on composition."""
+        creature_count = sum(
+            card.quantity for card in deck.mainboard
+            if 'creature' in card.card_type.lower()
+        )
+        total_nonland = sum(
+            card.quantity for card in deck.mainboard
+            if card.card_type.lower() != 'land'
+        )
+
+        if total_nonland == 0:
+            return 'midrange'
+
+        creature_ratio = creature_count / total_nonland
+
+        # Aggro: low CMC, high creature density
+        if avg_cmc < 2.5 and creature_ratio > 0.6:
+            return 'aggro'
+
+        # Control: high CMC, low creature density
+        if avg_cmc > 3.5 and creature_ratio < 0.3:
+            return 'control'
+
+        # Default to midrange
+        return 'midrange'
     
     def _identify_strengths_weaknesses(
         self, deck: Deck, mana_curve: ManaCurve, 
@@ -265,22 +344,8 @@ class DeckAnalyzer:
         
         return round(overall, 2)
     
-    def _load_meta_archetypes(self) -> List[Dict]:
-        """Load current meta archetypes (simplified)."""
-        return [
-            {
-                'name': 'Mono-Red Aggro',
-                'type': 'aggro',
-                'key_cards': ['Lightning Bolt', 'Monastery Swiftspear']
-            },
-            {
-                'name': 'Azorius Control',
-                'type': 'control',
-                'key_cards': ['Counterspell', 'Wrath of God']
-            },
-            {
-                'name': 'Rakdos Midrange',
-                'type': 'midrange',
-                'key_cards': ['Thoughtseize', 'Bonecrusher Giant']
-            }
-        ]
+    def _estimate_matchup_winrate(self, deck: Deck, archetype: Dict) -> float:
+        """Legacy method for backward compatibility."""
+        # This is kept for compatibility but shouldn't be used
+        # Use _estimate_matchup_winrate_enhanced instead
+        return 50.0
