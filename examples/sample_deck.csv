@@ -1,0 +1,6 @@
+Quantity,Name,Set,Type,Mana Cost,CMC,Colors,Rarity
+4,Lightning Bolt,M11,Instant,R,1,R,Uncommon
+4,Monastery Swiftspear,KTK,Creature,R,1,R,Uncommon
+4,Bonecrusher Giant,ELD,Creature,2R,3,R,Rare
+4,Embercleave,ELD,Artifact,4RR,6,R,Mythic
+20,Mountain,ZNR,Land,,0,,Common
