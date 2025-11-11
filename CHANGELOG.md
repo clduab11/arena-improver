@@ -33,6 +33,111 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Docker deployment support
   - Example workflows and sample data
 
+### Added - November 2025 Claude AI Integration
+
+#### GitHub Integration for Automated Reviews
+
+- **CLAUDE.md**: Comprehensive usage guide for Claude AI integration
+  - Command reference for PR and issue reviews
+  - Best practices for tagging Claude
+  - Example use cases and workflows
+  - Troubleshooting guide
+  - Learning resources
+
+- **.github/SETUP.md**: Step-by-step setup instructions
+  - API key configuration
+  - Repository secrets setup
+  - Permissions configuration
+  - Testing procedures
+  - Security best practices
+  - Cost management guidance
+
+- **.github/CLAUDE_CONFIG.yml**: Claude behavior configuration
+  - Review focus areas (security, performance, testing, etc.)
+  - Auto-review settings
+  - Severity thresholds
+  - Rate limiting
+  - Project-specific context
+  - Customizable review patterns
+
+#### GitHub Actions Workflows
+
+- **.github/workflows/claude-pr-review.yml**: Automated PR code review
+  - Triggers on PR creation, updates, or @claude mention
+  - Comprehensive code analysis
+  - Security vulnerability detection
+  - Performance optimization suggestions
+  - Test coverage verification
+  - Automated comment posting with review results
+
+- **.github/workflows/claude-issue-assistant.yml**: Issue analysis automation
+  - Triggers on issue creation with 'claude-review' label or @claude mention
+  - Root cause analysis
+  - Solution recommendations with code examples
+  - Similar issue detection
+  - Testing strategy suggestions
+
+#### Review Automation Scripts
+
+- **.github/scripts/claude_reviewer.py**: PR review implementation
+  - Fetches PR diffs and context
+  - Analyzes code changes using Claude API
+  - Checks for security issues, bugs, code quality
+  - Generates formatted review comments
+  - Tracks metrics and usage
+
+- **.github/scripts/claude_issue_assistant.py**: Issue assistance implementation
+  - Fetches issue context and comments
+  - Searches for similar issues
+  - Extracts relevant code snippets
+  - Provides detailed analysis and solutions
+  - Suggests prevention strategies
+
+#### GitHub Templates
+
+- **.github/ISSUE_TEMPLATE/bug_report.yml**: Bug report template
+  - Structured issue format
+  - Claude integration hints
+  - Pre-submission checklist
+  - Environment information collection
+
+- **.github/ISSUE_TEMPLATE/feature_request.yml**: Feature request template
+  - Problem statement format
+  - Use case collection
+  - Implementation assistance offers
+  - Claude guidance integration
+
+- **.github/ISSUE_TEMPLATE/config.yml**: Template configuration
+  - Links to documentation
+  - Community discussion channels
+  - Claude integration guide
+
+- **.github/PULL_REQUEST_TEMPLATE.md**: PR template
+  - Comprehensive PR checklist
+  - Code quality requirements
+  - Security verification
+  - Testing guidelines
+  - Claude review instructions
+
+#### Features
+
+- **Automated Code Reviews**: Claude analyzes PRs for security, quality, and performance
+- **Security Scanning**: Detects SQL injection, XSS, command injection, and more
+- **Issue Analysis**: Provides root cause analysis and solution recommendations
+- **Code Examples**: Generates specific code fixes and improvements
+- **Test Coverage**: Verifies and suggests test improvements
+- **Performance**: Identifies optimization opportunities
+- **Documentation**: Reviews and suggests documentation improvements
+
+#### Benefits
+
+- Faster code review turnaround
+- Consistent review quality
+- Early detection of security issues
+- Educational feedback for developers
+- 24/7 availability for assistance
+- Reduced reviewer workload
+
 ### Added - November 2025 Best Practices Implementation
 
 #### Dependency Management
