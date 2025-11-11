@@ -12,7 +12,7 @@
 #   make format        Format code
 #   make clean         Clean build artifacts
 #
-# Last updated: 2025-11-11
+# Last updated: 2024-11-11
 # ============================================================================
 
 .PHONY: help

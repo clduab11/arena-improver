@@ -10,36 +10,76 @@ import argparse
 import json
 import os
 import sys
-from pathlib import Path
-from typing import Any
+from typing import Any, Dict
 
 try:
     import anthropic
-    from github import Github
-except ImportError:
-    print("Error: Required packages not installed")
-    print("Please run: pip install anthropic PyGithub")
-    sys.exit(1)
+    from github import Github, GithubException
+    import yaml
+except ImportError as e:
+    print(f"Error: Missing required package: {e.name if hasattr(e, 'name') else str(e)}")
+    print("Installing required packages...")
+    import subprocess
+    try:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "anthropic", "PyGithub", "PyYAML"])
+        import anthropic
+        from github import Github, GithubException
+        import yaml
+    except Exception as install_error:
+        print(f"Failed to install packages: {install_error}")
+        sys.exit(1)
 
 
 class ClaudeReviewer:
     """Automated code reviewer using Claude AI."""
 
+    # Resource limits
+    MAX_DIFF_SIZE = 50000  # characters
+    MAX_FILES = 50
+    MAX_FILE_DIFF_SIZE = 5000  # characters per file
+
     def __init__(self, api_key: str, github_token: str) -> None:
         """Initialize the reviewer with API credentials."""
         self.client = anthropic.Anthropic(api_key=api_key)
         self.github = Github(github_token)
-        self.model = "claude-sonnet-4-5-20250929"
+        self.model = self._load_model_from_config()
+
+    def _load_model_from_config(self) -> str:
+        """Load model name from configuration file."""
+        config_path = ".github/CLAUDE_CONFIG.yml"
+        default_model = "claude-sonnet-4-5-20250929"
+        
+        try:
+            if os.path.exists(config_path):
+                with open(config_path, 'r') as f:
+                    config = yaml.safe_load(f)
+                    return config.get('model', {}).get('name', default_model)
+        except Exception as e:
+            print(f"Warning: Could not load model from config: {e}")
+        
+        return default_model
 
     def get_pr_diff(self, repo_name: str, pr_number: int) -> str:
-        """Get the diff for a pull request."""
-        repo = self.github.get_repo(repo_name)
-        pr = repo.get_pull(pr_number)
+        """Get the diff for a pull request with resource limits."""
+        try:
+            repo = self.github.get_repo(repo_name)
+            pr = repo.get_pull(pr_number)
+        except GithubException as e:
+            print(f"GitHub API error: {e.status} - {e.data}")
+            raise
+        except Exception as e:
+            print(f"Unexpected error fetching PR: {str(e)}")
+            raise
 
         diff_text = []
-        files = pr.get_files()
+        files = list(pr.get_files())[:self.MAX_FILES]
+        total_diff_size = 0
 
         for file in files:
+            if total_diff_size > self.MAX_DIFF_SIZE:
+                diff_text.append("\n[Truncated: diff too large]")
+                break
+
             diff_text.append(f"\n{'='*80}")
             diff_text.append(f"File: {file.filename}")
             diff_text.append(f"Status: {file.status}")
@@ -47,16 +87,38 @@ class ClaudeReviewer:
             diff_text.append(f"{'='*80}\n")
 
             if file.patch:
-                diff_text.append(file.patch)
+                patch_content = file.patch[:self.MAX_FILE_DIFF_SIZE]
+                total_diff_size += len(patch_content)
+                diff_text.append(patch_content)
+                if len(file.patch) > self.MAX_FILE_DIFF_SIZE:
+                    diff_text.append("\n[File diff truncated]")
             else:
                 diff_text.append("(Binary file or no diff available)")
 
         return "\n".join(diff_text)
 
-    def get_pr_context(self, repo_name: str, pr_number: int) -> dict[str, Any]:
-        """Get context about the pull request."""
-        repo = self.github.get_repo(repo_name)
-        pr = repo.get_pull(pr_number)
+    def get_pr_context(self, repo_name: str, pr_number: int) -> Dict[str, Any]:
+        """Get context about the pull request.
+        
+        Args:
+            repo_name: Repository in owner/name format
+            pr_number: Pull request number to analyze
+            
+        Returns:
+            Dictionary containing PR metadata
+            
+        Raises:
+            GithubException: If GitHub API call fails
+        """
+        try:
+            repo = self.github.get_repo(repo_name)
+            pr = repo.get_pull(pr_number)
+        except GithubException as e:
+            print(f"GitHub API error: {e.status} - {e.data}")
+            raise
+        except Exception as e:
+            print(f"Unexpected error fetching PR context: {str(e)}")
+            raise
 
         return {
             "title": pr.title,
@@ -69,7 +131,7 @@ class ClaudeReviewer:
             "deletions": pr.deletions,
         }
 
-    def create_review_prompt(self, context: dict[str, Any], diff: str) -> str:
+    def create_review_prompt(self, context: Dict[str, Any], diff: str) -> str:
         """Create the prompt for Claude to review the code."""
         return f"""You are an expert code reviewer for a Python project called "arena-improver",
 an AI-powered Magic: The Gathering Arena deck analysis platform.
@@ -149,8 +211,20 @@ Please provide your review in the following markdown format:
 
     def review_pr(
         self, repo_name: str, pr_number: int
-    ) -> tuple[str, dict[str, Any]]:
-        """Perform a code review on a pull request."""
+    ) -> tuple[str, Dict[str, Any]]:
+        """Perform a code review on a pull request.
+        
+        Args:
+            repo_name: Repository in owner/name format
+            pr_number: Pull request number to review
+            
+        Returns:
+            Tuple of (review text, metrics dictionary)
+            
+        Raises:
+            GithubException: If GitHub API call fails
+            APIError: If Claude API call fails
+        """
         print(f"Fetching PR #{pr_number} from {repo_name}...")
         context = self.get_pr_context(repo_name, pr_number)
 
@@ -189,7 +263,7 @@ Please provide your review in the following markdown format:
             return f"## Error\n\n{error_msg}", {}
 
     def save_review(
-        self, review_text: str, metrics: dict[str, Any], output_file: str = "claude_review.md"
+        self, review_text: str, metrics: Dict[str, Any], output_file: str = "claude_review.md"
     ) -> None:
         """Save the review to a file."""
         with open(output_file, "w", encoding="utf-8") as f:
@@ -215,12 +289,12 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    # Get API keys from environment
+    # Get API keys from environment with validation
     api_key = os.getenv("ANTHROPIC_API_KEY")
     github_token = os.getenv("GITHUB_TOKEN")
 
-    if not api_key:
-        print("Error: ANTHROPIC_API_KEY environment variable not set")
+    if not api_key or not api_key.startswith('sk-ant-'):
+        print("Error: Invalid ANTHROPIC_API_KEY format")
         sys.exit(1)
 
     if not github_token:

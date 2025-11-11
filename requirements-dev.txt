@@ -40,10 +40,11 @@ pip-audit==2.7.3                 # Audit pip packages for vulnerabilities
 # ----------------------------------------------------------------------------
 # Code Formatting
 # ----------------------------------------------------------------------------
-black==24.10.0                   # Code formatter (opinionated)
-isort==5.13.2                    # Import statement organizer
-autoflake==2.3.1                 # Remove unused imports and variables
-autopep8==2.3.1                  # PEP 8 auto-formatter
+# Note: Ruff handles most of the formatting below. Consider removing these to avoid redundancy.
+black==24.10.0                   # Code formatter (opinionated) - Ruff can replace this
+isort==5.13.2                    # Import statement organizer - Ruff can replace this
+autoflake==2.3.1                 # Remove unused imports and variables - Ruff can replace this
+autopep8==2.3.1                  # PEP 8 auto-formatter - Ruff can replace this
 
 # ----------------------------------------------------------------------------
 # Documentation

@@ -9,31 +9,82 @@ for GitHub issues.
 import argparse
 import json
 import os
+import re
 import sys
-from typing import Any
+from typing import Any, Dict, List
 
 try:
     import anthropic
-    from github import Github
-except ImportError:
-    print("Error: Required packages not installed")
-    print("Please run: pip install anthropic PyGithub")
-    sys.exit(1)
+    from github import Github, GithubException, UnknownObjectException
+    import yaml
+except ImportError as e:
+    print(f"Error: Missing required package: {e.name if hasattr(e, 'name') else str(e)}")
+    print("Installing required packages...")
+    import subprocess
+    try:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "anthropic", "PyGithub", "PyYAML"])
+        import anthropic
+        from github import Github, GithubException, UnknownObjectException
+        import yaml
+    except Exception as install_error:
+        print(f"Failed to install packages: {install_error}")
+        sys.exit(1)
 
 
 class ClaudeIssueAssistant:
     """Automated issue assistant using Claude AI."""
 
+    # Constants for limits
+    MAX_SIMILAR_ISSUES = 5
+    MAX_RECENT_COMMENTS = 5
+    MAX_TITLE_LENGTH_FOR_SEARCH = 50
+    MAX_ISSUE_BODY_LENGTH = 1000
+    MAX_CODE_FILES = 3
+    MAX_CODE_SNIPPET_LENGTH = 1000
+
     def __init__(self, api_key: str, github_token: str) -> None:
         """Initialize the assistant with API credentials."""
         self.client = anthropic.Anthropic(api_key=api_key)
         self.github = Github(github_token)
-        self.model = "claude-sonnet-4-5-20250929"
+        self.model = self._load_model_from_config()
 
-    def get_issue_context(self, repo_name: str, issue_number: int) -> dict[str, Any]:
-        """Get context about the issue."""
-        repo = self.github.get_repo(repo_name)
-        issue = repo.get_issue(issue_number)
+    def _load_model_from_config(self) -> str:
+        """Load model name from configuration file."""
+        config_path = ".github/CLAUDE_CONFIG.yml"
+        default_model = "claude-sonnet-4-5-20250929"
+        
+        try:
+            if os.path.exists(config_path):
+                with open(config_path, 'r') as f:
+                    config = yaml.safe_load(f)
+                    return config.get('model', {}).get('name', default_model)
+        except Exception as e:
+            print(f"Warning: Could not load model from config: {e}")
+        
+        return default_model
+
+    def get_issue_context(self, repo_name: str, issue_number: int) -> Dict[str, Any]:
+        """Get context about the issue.
+        
+        Args:
+            repo_name: Repository in owner/name format
+            issue_number: Issue number to analyze
+            
+        Returns:
+            Dictionary containing issue metadata
+            
+        Raises:
+            GithubException: If GitHub API call fails
+        """
+        try:
+            repo = self.github.get_repo(repo_name)
+            issue = repo.get_issue(issue_number)
+        except GithubException as e:
+            print(f"GitHub API error: {e.status} - {e.data}")
+            raise
+        except Exception as e:
+            print(f"Unexpected error fetching issue: {str(e)}")
+            raise
 
         # Get comments
         comments = []
@@ -59,60 +110,104 @@ class ClaudeIssueAssistant:
             "updated_at": issue.updated_at.isoformat(),
         }
 
-    def search_similar_issues(self, repo_name: str, title: str) -> list[dict[str, Any]]:
-        """Search for similar issues in the repository."""
-        repo = self.github.get_repo(repo_name)
+    def search_similar_issues(self, repo_name: str, title: str) -> List[Dict[str, Any]]:
+        """Search for similar issues in the repository.
+        
+        Args:
+            repo_name: Repository in owner/name format
+            title: Issue title to search for similarities
+            
+        Returns:
+            List of similar issues with metadata
+        """
+        try:
+            # Sanitize title for search
+            safe_title = title[:self.MAX_TITLE_LENGTH_FOR_SEARCH]
+            
+            # Search for similar issues
+            query = f"repo:{repo_name} is:issue {safe_title}"
+            results = self.github.search_issues(query)
 
-        # Search for similar issues
-        query = f"repo:{repo_name} is:issue {title[:50]}"
-        results = self.github.search_issues(query)
+            similar_issues = []
+            for issue in list(results)[:self.MAX_SIMILAR_ISSUES]:
+                similar_issues.append({
+                    "number": issue.number,
+                    "title": issue.title,
+                    "state": issue.state,
+                    "url": issue.html_url
+                })
 
-        similar = []
-        for issue in list(results)[:5]:  # Limit to 5 similar issues
-            similar.append({
-                "number": issue.number,
-                "title": issue.title,
-                "state": issue.state,
-                "url": issue.html_url
-            })
-
-        return similar
+            return similar_issues
+        except GithubException as e:
+            print(f"Warning: Could not search similar issues: {e.status}")
+            return []
+        except Exception as e:
+            print(f"Warning: Error searching similar issues: {str(e)}")
+            return []
 
     def get_relevant_code(self, repo_name: str, issue_body: str) -> str:
-        """Extract file paths from issue and get relevant code snippets."""
-        repo = self.github.get_repo(repo_name)
+        """Extract file paths from issue and get relevant code snippets.
+        
+        Args:
+            repo_name: Repository in owner/name format
+            issue_body: Issue body text to extract file references from
+            
+        Returns:
+            String containing code snippets from referenced files
+        """
+        try:
+            repo = self.github.get_repo(repo_name)
+        except GithubException as e:
+            print(f"Warning: Could not access repository: {e.status}")
+            return "No code files referenced"
 
+        # Sanitize issue body and limit length
+        safe_body = issue_body[:self.MAX_ISSUE_BODY_LENGTH]
+        
         # Try to find file references in the issue body
         # Look for patterns like: src/file.py, file.py:123, etc.
-        import re
+        # Using a more restrictive pattern to prevent injection
         file_pattern = r'(?:src/)?[\w/]+\.py(?::\d+)?'
-        files = re.findall(file_pattern, issue_body)
+        try:
+            files = re.findall(file_pattern, safe_body)
+        except re.error as e:
+            print(f"Warning: Regex error: {e}")
+            return "No code files referenced"
 
         code_snippets = []
-        for file_ref in files[:3]:  # Limit to 3 files
+        for file_ref in files[:self.MAX_CODE_FILES]:
             file_path = file_ref.split(':')[0]
+            
+            # Validate file path to prevent path traversal
+            if '..' in file_path or file_path.startswith('/'):
+                continue
+                
             try:
                 content = repo.get_contents(file_path)
                 if hasattr(content, 'decoded_content'):
                     code = content.decoded_content.decode('utf-8')
-                    code_snippets.append(f"### {file_path}\n\n```python\n{code[:1000]}\n```")
+                    code_snippet = code[:self.MAX_CODE_SNIPPET_LENGTH]
+                    code_snippets.append(f"### {file_path}\n\n```python\n{code_snippet}\n```")
             except UnknownObjectException:
+                continue
+            except Exception as e:
+                print(f"Warning: Could not fetch {file_path}: {str(e)}")
                 continue
 
         return "\n\n".join(code_snippets) if code_snippets else "No code files referenced"
 
     def create_analysis_prompt(
-        self, context: dict[str, Any], similar: list[dict[str, Any]], code: str
+        self, context: Dict[str, Any], similar: List[Dict[str, Any]], code: str
     ) -> str:
         """Create the prompt for Claude to analyze the issue."""
         comments_text = "\n".join([
             f"- {c['author']}: {c['body'][:200]}"
-            for c in context['comments'][:5]
+            for c in context['comments'][:self.MAX_RECENT_COMMENTS]
         ]) if context['comments'] else "No comments yet"
 
         similar_text = "\n".join([
             f"- #{s['number']}: {s['title']} ({s['state']})"
-            for s in similar[:3]
+            for s in similar[:self.MAX_SIMILAR_ISSUES]
         ]) if similar else "No similar issues found"
 
         return f"""You are an expert technical assistant for a Python project called "arena-improver",
@@ -200,8 +295,20 @@ Provide your response in this markdown format:
 
     def analyze_issue(
         self, repo_name: str, issue_number: int
-    ) -> tuple[str, dict[str, Any]]:
-        """Analyze a GitHub issue."""
+    ) -> tuple[str, Dict[str, Any]]:
+        """Analyze a GitHub issue.
+        
+        Args:
+            repo_name: Repository in owner/name format
+            issue_number: Issue number to analyze
+            
+        Returns:
+            Tuple of (analysis text, metrics dictionary)
+            
+        Raises:
+            GithubException: If GitHub API call fails
+            APIError: If Claude API call fails
+        """
         print(f"Fetching issue #{issue_number} from {repo_name}...")
         context = self.get_issue_context(repo_name, issue_number)
 
@@ -241,7 +348,7 @@ Provide your response in this markdown format:
             return f"## Error\n\n{error_msg}", {}
 
     def save_analysis(
-        self, analysis_text: str, metrics: dict[str, Any],
+        self, analysis_text: str, metrics: Dict[str, Any],
         output_file: str = "claude_issue_response.md"
     ) -> None:
         """Save the analysis to a file."""
@@ -266,12 +373,12 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    # Get API keys from environment
+    # Get API keys from environment with validation
     api_key = os.getenv("ANTHROPIC_API_KEY")
     github_token = os.getenv("GITHUB_TOKEN")
 
-    if not api_key:
-        print("Error: ANTHROPIC_API_KEY environment variable not set")
+    if not api_key or not api_key.startswith('sk-ant-'):
+        print("Error: Invalid ANTHROPIC_API_KEY format")
         sys.exit(1)
 
     if not github_token:

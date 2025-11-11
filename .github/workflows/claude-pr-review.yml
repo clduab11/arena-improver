@@ -17,6 +17,7 @@ jobs:
   claude-review:
     name: Claude Code Review
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     if: |
       (github.event_name == 'pull_request') ||
       (github.event_name == 'issue_comment' && github.event.issue.pull_request && contains(github.event.comment.body, '@claude')) ||
@@ -88,7 +89,7 @@ jobs:
         if: steps.check_trigger.outputs.auto_review == 'true'
         run: |
           pip install --upgrade pip
-          pip install anthropic PyGithub
+          pip install anthropic==0.39.0 PyGithub==2.1.1 PyYAML==6.0.1
 
       - name: Run Claude Code Review
         if: steps.check_trigger.outputs.auto_review == 'true'
@@ -112,7 +113,12 @@ jobs:
             let reviewComment = '## 🤖 Claude Code Review\n\n';
 
             if (fs.existsSync('claude_review.md')) {
-              reviewComment += fs.readFileSync('claude_review.md', 'utf8');
+              let response = fs.readFileSync('claude_review.md', 'utf8');
+              // GitHub comment limit is 65536 characters
+              if (response.length > 65000) {
+                response = response.substring(0, 65000) + '\n\n[Truncated - see artifacts for full review]';
+              }
+              reviewComment += response;
             } else {
               reviewComment += '✅ No issues found. Code looks good!\n\n';
               reviewComment += '**Review completed successfully.**';

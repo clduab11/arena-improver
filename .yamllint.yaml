@@ -10,7 +10,7 @@
 #   yamllint -s file.yaml         # Strict mode
 #   yamllint -c .yamllint.yaml .  # Use this config
 #
-# Last updated: 2025-11-11
+# Last updated: 2024-11-11
 # ============================================================================
 
 extends: default
