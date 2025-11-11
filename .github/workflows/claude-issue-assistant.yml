@@ -1,0 +1,101 @@
+name: Claude Issue Assistant
+
+on:
+  issues:
+    types: [opened, labeled]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  claude-assist:
+    name: Claude Issue Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: |
+      (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'claude-review')) ||
+      (github.event_name == 'issue_comment' && !github.event.issue.pull_request && contains(github.event.comment.body, '@claude'))
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get issue details
+        id: issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            return {
+              number: issue.number,
+              title: issue.title,
+              body: issue.body,
+              labels: issue.labels.map(l => l.name),
+              author: issue.user.login
+            };
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          # anthropic>=0.18.0 fixes Client init issue, <1.0.0 prevents breaking changes
+          pip install "anthropic>=0.18.0,<1.0.0" PyGithub==2.1.1 PyYAML==6.0.1
+
+      - name: Analyze issue with Claude
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python .github/scripts/claude_issue_assistant.py \
+            --issue-number "${{ fromJson(steps.issue.outputs.result).number }}" \
+            --repo "${{ github.repository }}"
+
+      - name: Post analysis
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const GITHUB_COMMENT_MAX_LENGTH = 65000;  // Leave buffer below 65536 limit
+
+            let response = '## 🤖 Claude Issue Analysis\n\n';
+
+            if (fs.existsSync('claude_issue_response.md')) {
+              let analysisText = fs.readFileSync('claude_issue_response.md', 'utf8');
+              // GitHub comment limit is 65536 characters
+              if (analysisText.length > GITHUB_COMMENT_MAX_LENGTH) {
+                analysisText = analysisText.substring(0, GITHUB_COMMENT_MAX_LENGTH) + '\n\n[Truncated - see artifacts for full analysis]';
+              }
+              response += analysisText;
+            } else {
+              response += '✅ Analysis completed.\n\n';
+              response += 'I\'ve analyzed this issue. See the workflow logs for details.';
+            }
+
+            response += '\n\n---\n';
+            response += '*Automated analysis by Claude AI | See [CLAUDE.md](https://github.com/' + context.repo.owner + '/' + context.repo.repo + '/blob/main/CLAUDE.md) for more information*';
+
+            const issueNumber = ${{ fromJson(steps.issue.outputs.result).number }};
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: response
+            });
+
+      - name: Upload analysis artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-issue-analysis-${{ github.run_number }}
+          path: |
+            claude_issue_response.md
+            claude_issue_details.json
+          retention-days: 30

@@ -1,0 +1,149 @@
+name: Claude PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  claude-review:
+    name: Claude Code Review
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: |
+      (github.event_name == 'pull_request') ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude'))
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get PR details
+        id: pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            let prNumber;
+            if (context.eventName === 'pull_request') {
+              prNumber = context.payload.pull_request.number;
+            } else if (context.eventName === 'pull_request_review_comment') {
+              prNumber = context.payload.pull_request.number;
+            } else if (context.payload.issue) {
+              prNumber = context.payload.issue.number;
+            }
+
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber
+            });
+
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber
+            });
+
+            return {
+              number: prNumber,
+              title: pr.title,
+              body: pr.body,
+              base: pr.base.sha,
+              head: pr.head.sha,
+              files: files.map(f => f.filename)
+            };
+
+      - name: Check if Claude review requested
+        id: check_trigger
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body || '' }}
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "auto_review=true" >> $GITHUB_OUTPUT
+          else
+            if echo "$COMMENT_BODY" | grep -iq "@claude"; then
+              echo "auto_review=true" >> $GITHUB_OUTPUT
+            else
+              echo "auto_review=false" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: Set up Python
+        if: steps.check_trigger.outputs.auto_review == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        if: steps.check_trigger.outputs.auto_review == 'true'
+        run: |
+          pip install --upgrade pip
+          # anthropic>=0.18.0 fixes Client init issue, <1.0.0 prevents breaking changes
+          pip install "anthropic>=0.18.0,<1.0.0" PyGithub==2.1.1 PyYAML==6.0.1
+
+      - name: Run Claude Code Review
+        if: steps.check_trigger.outputs.auto_review == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python .github/scripts/claude_reviewer.py \
+            --pr-number "${{ fromJson(steps.pr.outputs.result).number }}" \
+            --repo "${{ github.repository }}" \
+            --base-sha "${{ fromJson(steps.pr.outputs.result).base }}" \
+            --head-sha "${{ fromJson(steps.pr.outputs.result).head }}"
+
+      - name: Post review summary
+        if: steps.check_trigger.outputs.auto_review == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const GITHUB_COMMENT_MAX_LENGTH = 65000;  // Leave buffer below 65536 limit
+
+            let reviewComment = '## 🤖 Claude Code Review\n\n';
+
+            if (fs.existsSync('claude_review.md')) {
+              let response = fs.readFileSync('claude_review.md', 'utf8');
+              // GitHub comment limit is 65536 characters
+              if (response.length > GITHUB_COMMENT_MAX_LENGTH) {
+                response = response.substring(0, GITHUB_COMMENT_MAX_LENGTH) + '\n\n[Truncated - see artifacts for full review]';
+              }
+              reviewComment += response;
+            } else {
+              reviewComment += '✅ No issues found. Code looks good!\n\n';
+              reviewComment += '**Review completed successfully.**';
+            }
+
+            reviewComment += '\n\n---\n';
+            reviewComment += '*Automated review by Claude AI | See [CLAUDE.md](https://github.com/' + context.repo.owner + '/' + context.repo.repo + '/blob/main/CLAUDE.md) for more information*';
+
+            const prNumber = ${{ fromJson(steps.pr.outputs.result).number }};
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: reviewComment
+            });
+
+      - name: Upload review artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-review-${{ github.run_number }}
+          path: |
+            claude_review.md
+            claude_review_details.json
+          retention-days: 30

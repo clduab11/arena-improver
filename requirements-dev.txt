@@ -1,0 +1,120 @@
+# ============================================================================
+# Development Dependencies for arena-improver
+# ============================================================================
+#
+# This file contains development-only dependencies (testing, linting, etc.)
+# These should NOT be installed in production environments.
+#
+# Installation:
+#   pip install -r requirements.txt -r requirements-dev.txt
+#
+# Last updated: 2025-11-11
+# ============================================================================
+
+# Include production dependencies
+-r requirements.txt
+
+# ----------------------------------------------------------------------------
+# Testing Framework & Tools
+# ----------------------------------------------------------------------------
+pytest==8.3.4                    # Testing framework
+pytest-cov==6.0.0                # Coverage plugin for pytest
+pytest-asyncio==0.24.0           # Async support for pytest
+pytest-mock==3.14.0              # Mock plugin for pytest
+pytest-xdist==3.6.1              # Parallel test execution
+coverage[toml]==7.6.9            # Code coverage measurement
+hypothesis==6.122.3              # Property-based testing
+factory-boy==3.3.1               # Test fixtures replacement
+faker==33.1.0                    # Fake data generation
+
+# ----------------------------------------------------------------------------
+# Code Quality & Linting
+# ----------------------------------------------------------------------------
+ruff==0.8.2                      # Fast Python linter and formatter (replaces flake8, isort, black)
+mypy==1.13.0                     # Static type checker
+pylint==3.3.2                    # Traditional comprehensive linter
+bandit==1.7.10                   # Security linter
+safety==3.2.11                   # Dependency vulnerability scanner
+pip-audit==2.7.3                 # Audit pip packages for vulnerabilities
+
+# ----------------------------------------------------------------------------
+# Code Formatting
+# ----------------------------------------------------------------------------
+# Note: Ruff handles most of the formatting below. Consider removing these to avoid redundancy.
+black==24.10.0                   # Code formatter (opinionated) - Ruff can replace this
+isort==5.13.2                    # Import statement organizer - Ruff can replace this
+autoflake==2.3.1                 # Remove unused imports and variables - Ruff can replace this
+autopep8==2.3.1                  # PEP 8 auto-formatter - Ruff can replace this
+
+# ----------------------------------------------------------------------------
+# Documentation
+# ----------------------------------------------------------------------------
+sphinx==8.1.3                    # Documentation generator
+sphinx-rtd-theme==3.0.2          # Read the Docs theme for Sphinx
+myst-parser==4.0.0               # Markdown parser for Sphinx
+sphinx-autodoc-typehints==2.5.0  # Type hints support for autodoc
+mkdocs==1.6.1                    # Alternative documentation tool
+mkdocs-material==9.5.48          # Material theme for MkDocs
+
+# ----------------------------------------------------------------------------
+# Type Stubs
+# ----------------------------------------------------------------------------
+types-requests==2.32.0.20241016  # Type stubs for requests
+types-python-dateutil==2.9.0.20241003  # Type stubs for python-dateutil
+types-redis==4.6.0.20241004      # Type stubs for redis
+
+# ----------------------------------------------------------------------------
+# Development Tools
+# ----------------------------------------------------------------------------
+ipython==8.30.0                  # Enhanced interactive Python shell
+ipdb==0.13.13                    # IPython debugger
+pre-commit==4.0.1                # Git pre-commit hooks framework
+commitizen==4.1.0                # Conventional commits tool
+bumpversion==0.6.0               # Version bumping tool
+
+# ----------------------------------------------------------------------------
+# Dependency Management
+# ----------------------------------------------------------------------------
+pip-tools==7.4.1                 # Pin dependencies, generate requirements
+pipdeptree==2.23.4               # Display dependency tree
+
+# ----------------------------------------------------------------------------
+# Performance & Profiling
+# ----------------------------------------------------------------------------
+py-spy==0.4.0                    # Sampling profiler
+memory-profiler==0.61.0          # Memory usage profiler
+line-profiler==4.2.0             # Line-by-line profiler
+
+# ----------------------------------------------------------------------------
+# Build & Packaging
+# ----------------------------------------------------------------------------
+build==1.2.2.post1               # PEP 517 build frontend
+twine==6.0.1                     # Package uploader for PyPI
+wheel==0.45.1                    # Built-package format
+setuptools==75.6.0               # Package installation and distribution
+
+# ============================================================================
+# Development Workflow Recommendations:
+# ============================================================================
+#
+# 1. Code Quality Checks (run before commits):
+#    ruff check .                    # Fast linting
+#    ruff format .                   # Fast formatting
+#    mypy .                          # Type checking
+#    bandit -r .                     # Security scanning
+#    pip-audit                       # Dependency vulnerability check
+#
+# 2. Testing:
+#    pytest                          # Run all tests
+#    pytest --cov=. --cov-report=html  # With coverage
+#    pytest -n auto                  # Parallel execution
+#
+# 3. Pre-commit Hooks (recommended):
+#    pre-commit install
+#    pre-commit run --all-files
+#
+# 4. Documentation:
+#    sphinx-build -b html docs/ docs/_build/  # Sphinx
+#    mkdocs serve                    # MkDocs (live preview)
+#
+# ============================================================================

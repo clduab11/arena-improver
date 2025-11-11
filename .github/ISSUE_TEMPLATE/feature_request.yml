@@ -1,0 +1,136 @@
+name: Feature Request
+description: Suggest a new feature or enhancement
+title: "[Feature]: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Thank you for suggesting a feature!
+
+        Please fill out this form to help us understand your request.
+
+        💡 **Tip**: Tag @claude in a comment to get implementation suggestions and technical guidance!
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What problem does this feature solve?
+      placeholder: Describe the problem or limitation you're experiencing
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: How would you like this problem to be solved?
+      placeholder: Describe your proposed solution
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Have you considered any alternative solutions?
+      placeholder: Describe alternative approaches you've considered
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which part of the application would this affect?
+      options:
+        - API / FastAPI
+        - Database / SQLAlchemy
+        - Deck Analyzer
+        - CSV Parser
+        - Embeddings
+        - SmartInference (OpenAI)
+        - SmartMemory
+        - SmartSQL
+        - MCP Server
+        - Documentation
+        - New Component
+        - Multiple Components
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How important is this feature to you?
+      options:
+        - Critical - Blocking my use of the project
+        - High - Significantly improves usability
+        - Medium - Nice to have
+        - Low - Minor enhancement
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-cases
+    attributes:
+      label: Use Cases
+      description: Describe specific use cases for this feature
+      placeholder: |
+        1. As a user, I want to...
+        2. When analyzing decks, I need to...
+      value: |
+        1.
+        2.
+        3.
+
+  - type: textarea
+    id: technical
+    attributes:
+      label: Technical Considerations
+      description: Any technical details, constraints, or requirements?
+      placeholder: Performance requirements, dependencies, compatibility concerns, etc.
+
+  - type: textarea
+    id: mockups
+    attributes:
+      label: Mockups / Examples
+      description: Mockups, screenshots, or code examples
+      placeholder: Attach images or paste code examples
+
+  - type: checkboxes
+    id: implementation
+    attributes:
+      label: Implementation
+      description: Would you be willing to help implement this?
+      options:
+        - label: I would like to implement this feature myself
+        - label: I can provide additional technical details if needed
+        - label: I can help test this feature
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      options:
+        - label: I have searched existing issues to ensure this hasn't been requested
+          required: true
+        - label: This feature aligns with the project's goals
+          required: false
+        - label: I have considered the impact on existing functionality
+          required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+
+        ## 🤖 Want AI assistance?
+
+        After creating this issue, you can tag **@claude** in a comment to get:
+        - Implementation guidance and architecture suggestions
+        - Code examples and best practices
+        - Complexity analysis and effort estimation
+        - Alternative approaches to consider
+
+        Example: `@claude can you suggest how to implement this feature?`

@@ -1,0 +1,13 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 📚 Documentation
+    url: https://github.com/clduab11/arena-improver/blob/main/README.md
+    about: Read the project documentation and guides
+
+  - name: 🤖 Claude AI Integration
+    url: https://github.com/clduab11/arena-improver/blob/main/CLAUDE.md
+    about: Learn how to use Claude for code reviews and issue assistance
+
+  - name: 💬 Discussions
+    url: https://github.com/clduab11/arena-improver/discussions
+    about: Ask questions and discuss ideas with the community

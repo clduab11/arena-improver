@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "MCP for Magic: The Gathering Arena deck analysis and optimization"
 readme = "README.md"
 requires-python = ">=3.9"
-license = {text = "MIT"}
+license = {text = "AGPL-3.0"}
 authors = [
     {name = "clduab11"}
 ]

@@ -1,0 +1,234 @@
+# Claude AI Configuration
+# ============================================================================
+# This file configures Claude AI's behavior for automated code reviews
+# and issue assistance in the arena-improver repository.
+#
+# Last updated: 2025-11-11
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# Code Review Settings
+# ----------------------------------------------------------------------------
+review:
+  # Automatically review all pull requests (true) or only when tagged (false)
+  auto_review: true
+
+  # Focus areas for code review (all enabled by default)
+  focus_areas:
+    - security        # Security vulnerabilities and best practices
+    - performance     # Performance issues and optimization opportunities
+    - testing         # Test coverage and test quality
+    - style           # Code style and PEP 8 compliance
+    - complexity      # Code complexity and maintainability
+    - documentation   # Docstrings and comments
+    - types           # Type hints and type safety
+
+  # Minimum test coverage threshold (percentage)
+  min_coverage: 80
+
+  # Severity threshold for reporting issues
+  # Options: critical, high, medium, low, all
+  severity_threshold: medium
+
+  # File patterns to exclude from review
+  exclude_patterns:
+    - "**/__pycache__/**"
+    - "**/*.pyc"
+    - "**/.pytest_cache/**"
+    - "**/node_modules/**"
+    - "**/.venv/**"
+    - "**/.git/**"
+    - "**/dist/**"
+    - "**/build/**"
+    - "**/*.min.js"
+    - "**/*.min.css"
+
+  # File patterns to prioritize in review
+  priority_patterns:
+    - "src/**/*.py"
+    - "tests/**/*.py"
+    - "*.py"
+    - "pyproject.toml"
+    - "requirements*.txt"
+
+  # Maximum files to review in detail (larger PRs get summarized)
+  max_detailed_files: 20
+
+  # Check for these specific security issues
+  security_checks:
+    - sql_injection
+    - xss
+    - command_injection
+    - path_traversal
+    - hardcoded_secrets
+    - insecure_dependencies
+    - weak_crypto
+    - unsafe_deserialization
+
+# ----------------------------------------------------------------------------
+# Issue Assistance Settings
+# ----------------------------------------------------------------------------
+issues:
+  # Automatically respond to all new issues (true) or only when tagged (false)
+  auto_respond: false
+
+  # Automatically respond to issues with specific labels
+  auto_respond_labels:
+    - "claude-review"
+    - "bug"
+    - "help wanted"
+
+  # Provide code examples in responses
+  provide_examples: true
+
+  # Suggest specific fixes for bugs
+  suggest_fixes: true
+
+  # Search for similar issues
+  search_similar: true
+
+  # Maximum number of similar issues to reference
+  max_similar_issues: 3
+
+  # Issue types Claude can help with
+  supported_types:
+    - bug
+    - feature_request
+    - question
+    - enhancement
+    - documentation
+
+# ----------------------------------------------------------------------------
+# Model Configuration
+# ----------------------------------------------------------------------------
+model:
+  # Claude model to use for reviews
+  # Options: claude-sonnet-4-5-20250929, claude-opus-4-20250514
+  name: "claude-sonnet-4-5-20250929"
+
+  # Maximum tokens for responses
+  max_tokens: 4096
+
+  # Temperature for responses (0.0 = focused, 1.0 = creative)
+  temperature: 0.0
+
+# ----------------------------------------------------------------------------
+# Response Format
+# ----------------------------------------------------------------------------
+format:
+  # Use emoji indicators in responses
+  use_emojis: true
+
+  # Markdown style for code blocks
+  code_block_style: "python"
+
+  # Include confidence levels in recommendations
+  show_confidence: true
+
+  # Include estimated effort for fixes
+  show_effort_estimate: true
+
+  # Maximum length for inline code suggestions (characters)
+  max_inline_code: 500
+
+# ----------------------------------------------------------------------------
+# Project-Specific Context
+# ----------------------------------------------------------------------------
+project:
+  # Project name
+  name: "arena-improver"
+
+  # Primary programming language
+  language: "Python"
+
+  # Python version
+  python_version: "3.9+"
+
+  # Key technologies used
+  technologies:
+    - FastAPI
+    - SQLAlchemy
+    - Pytest
+    - OpenAI API
+    - Sentence Transformers
+    - Pydantic
+    - Uvicorn
+
+  # License
+  license: "AGPL-3.0"
+
+  # Code style tools
+  style_tools:
+    linter: "ruff"
+    formatter: "ruff"
+    type_checker: "mypy"
+
+  # Testing framework
+  test_framework: "pytest"
+
+  # Domain-specific context
+  domain: "Magic: The Gathering Arena deck analysis and optimization"
+
+  # Important files to always consider
+  important_files:
+    - "pyproject.toml"
+    - "requirements.txt"
+    - "README.md"
+    - "CLAUDE.md"
+
+# ----------------------------------------------------------------------------
+# Rate Limiting
+# ----------------------------------------------------------------------------
+rate_limits:
+  # Maximum reviews per hour
+  reviews_per_hour: 10
+
+  # Maximum issue responses per hour
+  issues_per_hour: 20
+
+  # Cooldown period between reviews (seconds)
+  review_cooldown: 60
+
+# ----------------------------------------------------------------------------
+# Notifications
+# ----------------------------------------------------------------------------
+notifications:
+  # Notify on critical issues found
+  notify_on_critical: true
+
+  # Notify on review completion
+  notify_on_completion: true
+
+  # Notify on errors
+  notify_on_error: true
+
+# ----------------------------------------------------------------------------
+# Learning & Improvement
+# ----------------------------------------------------------------------------
+learning:
+  # Collect feedback from developers
+  collect_feedback: true
+
+  # Use feedback to improve future reviews
+  use_feedback: true
+
+  # Track review accuracy metrics
+  track_metrics: true
+
+# ============================================================================
+# Usage Examples
+# ============================================================================
+#
+# Enable Claude for a specific PR:
+#   Add comment: "@claude please review"
+#
+# Request security-focused review:
+#   Add comment: "@claude check for security issues"
+#
+# Get help with an issue:
+#   Add comment: "@claude can you help with this bug?"
+#
+# Trigger automatic review:
+#   Add label: "claude-review"
+#
+# ============================================================================

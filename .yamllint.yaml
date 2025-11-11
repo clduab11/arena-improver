@@ -1,0 +1,138 @@
+# ============================================================================
+# YAML Lint Configuration
+# ============================================================================
+# Configuration for yamllint - a linter for YAML files.
+#
+# Documentation: https://yamllint.readthedocs.io/
+#
+# Usage:
+#   yamllint .                    # Lint all YAML files
+#   yamllint -s file.yaml         # Strict mode
+#   yamllint -c .yamllint.yaml .  # Use this config
+#
+# Last updated: 2025-11-11
+# ============================================================================
+
+extends: default
+
+# Ignore patterns
+ignore: |
+  .venv/
+  venv/
+  .tox/
+  build/
+  dist/
+  node_modules/
+  .github/
+
+rules:
+  # Line length
+  line-length:
+    max: 120
+    level: warning
+
+  # Indentation
+  indentation:
+    spaces: 2
+    indent-sequences: true
+    check-multi-line-strings: false
+
+  # Comments
+  comments:
+    min-spaces-from-content: 1
+    require-starting-space: true
+    ignore-shebangs: true
+
+  # Comments indentation
+  comments-indentation:
+    level: warning
+
+  # Document start (---)
+  document-start:
+    present: false
+
+  # Document end (...)
+  document-end:
+    present: false
+
+  # Empty lines
+  empty-lines:
+    max: 2
+    max-start: 0
+    max-end: 0
+
+  # Empty values
+  empty-values:
+    forbid-in-block-mappings: true
+    forbid-in-flow-mappings: true
+
+  # Key duplicates
+  key-duplicates:
+    level: error
+
+  # Key ordering
+  key-ordering:
+    level: warning
+
+  # Trailing spaces
+  trailing-spaces:
+    level: error
+
+  # Truthy values (yes/no vs true/false)
+  truthy:
+    allowed-values: ['true', 'false', 'yes', 'no']
+    check-keys: false
+    level: warning
+
+  # Brackets
+  brackets:
+    min-spaces-inside: 0
+    max-spaces-inside: 1
+
+  # Braces
+  braces:
+    min-spaces-inside: 0
+    max-spaces-inside: 1
+
+  # Colons
+  colons:
+    max-spaces-before: 0
+    max-spaces-after: 1
+
+  # Commas
+  commas:
+    max-spaces-before: 0
+    min-spaces-after: 1
+    max-spaces-after: 1
+
+  # Float values
+  float-values:
+    forbid-inf: true
+    forbid-nan: true
+    forbid-scientific-notation: false
+    require-numeral-before-decimal: false
+
+  # Hyphens
+  hyphens:
+    max-spaces-after: 1
+
+  # Octal values
+  octal-values:
+    forbid-implicit-octal: true
+    forbid-explicit-octal: false
+
+  # Quoted strings
+  quoted-strings:
+    quote-type: any
+    required: false
+    extra-required: []
+    extra-allowed: []
+
+# ============================================================================
+# Notes:
+# ============================================================================
+# - These rules help maintain consistent YAML formatting
+# - Some rules are warnings rather than errors for flexibility
+# - Adjust rules based on your project's specific needs
+# - CI/CD pipelines should run yamllint as part of quality checks
+# ============================================================================
