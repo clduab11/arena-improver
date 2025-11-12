@@ -170,7 +170,6 @@ class DeckAnalyzer:
         except Exception as e:
             logging.warning("Could not fetch meta data: %s", e, exc_info=True)
             # Return empty or use fallback heuristics
-            pass
 
         return matchups
     
