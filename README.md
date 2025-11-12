@@ -290,20 +290,15 @@ Arena Improver is **optimized for MTG Arena on Steam** with platform-specific fe
 Arena Improver uses **Tavily and Exa MCPs** to fetch live meta data:
 
 ```python
-import asyncio
+# Automatic meta data fetching
+meta_service = MetaIntelligenceService()
+snapshot = await meta_service.get_current_meta("Standard")
 
-async def main():
-    # Automatic meta data fetching
-    meta_service = MetaIntelligenceService()
-    snapshot = await meta_service.get_current_meta("Standard")
-
-    # Access live data:
-    # - Current meta shares from MTGGoldfish
-    # - Tournament results and winning decklists
-    # - Ban list updates
-    # - Emerging archetypes
-
-asyncio.run(main())
+# Access live data:
+# - Current meta shares from MTGGoldfish
+# - Tournament results and winning decklists
+# - Ban list updates
+# - Emerging archetypes
 ```
 
 ### Sequential Thinking for Complex Decisions

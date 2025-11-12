@@ -44,7 +44,7 @@ async def main():
     
     # Step 3: Analyze deck
     print("\n3. Analyzing deck...")
-    analysis = analyzer.analyze_deck(deck)
+    analysis = await analyzer.analyze_deck(deck)
     print(f"✓ Analysis complete!")
     print(f"\n  Overall Score: {analysis.overall_score}/100")
     print(f"  Curve Score: {analysis.mana_curve.curve_score:.1f}/100")
