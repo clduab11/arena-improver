@@ -258,16 +258,18 @@ async def meta_aware_analysis():
     sql_service = SmartSQLService()
     try:
         await sql_service.init_db()
+        deck = await sql_service.get_deck(1)
+        analysis = await analyzer.analyze_deck(deck)
+
+        print(f"\nYour Deck vs. Meta:")
+        for matchup in analysis.meta_matchups:
+            status = "✓ Favorable" if matchup.favorable else "✗ Unfavorable"
+            print(f"{status} vs {matchup.archetype}: {matchup.win_rate}%")
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
         raise
-    deck = await sql_service.get_deck(1)
-    analysis = await analyzer.analyze_deck(deck)
-
-    print(f"\nYour Deck vs. Meta:")
-    for matchup in analysis.meta_matchups:
-        status = "✓ Favorable" if matchup.favorable else "✗ Unfavorable"
-        print(f"{status} vs {matchup.archetype}: {matchup.win_rate}%")
+    finally:
+        await sql_service.close()
 
 asyncio.run(meta_aware_analysis())
 ```

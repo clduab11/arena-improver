@@ -151,6 +151,48 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
+### Error Handling Best Practices
+
+When working with Arena Improver services, proper error handling is essential for robust applications:
+
+```python
+import asyncio
+import logging
+from src.services.meta_intelligence import MetaIntelligenceService
+from src.services.smart_sql import SmartSQLService
+from src.exceptions import MetaDataUnavailableError
+
+logger = logging.getLogger(__name__)
+
+async def main():
+    meta_service = MetaIntelligenceService()
+    sql_service = SmartSQLService()
+    
+    try:
+        # Initialize database with error handling
+        await sql_service.init_db()
+    except Exception as e:
+        logger.error(f"Database initialization failed: {e}")
+        return
+    
+    try:
+        # Fetch meta data with fallback handling
+        snapshot = await meta_service.get_current_meta("Standard")
+        print(f"Top archetype: {snapshot.archetypes[0].name}")
+    except MetaDataUnavailableError as e:
+        logger.warning(f"Meta data unavailable: {e}")
+        # Handle gracefully - use cached data or continue without meta analysis
+        print("Proceeding without current meta data")
+    except Exception as e:
+        logger.error(f"Unexpected error fetching meta data: {e}")
+    finally:
+        # Always cleanup resources
+        await sql_service.close()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
 ### Real-Time Meta Analysis
 
 Arena Improver uses MCP tools to fetch current meta data specific to Arena:

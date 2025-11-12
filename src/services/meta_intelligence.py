@@ -16,6 +16,9 @@ from ..models.deck import Deck
 
 logger = logging.getLogger(__name__)
 
+# Constants
+SECONDS_PER_HOUR = 3600
+
 
 @dataclass
 class MetaArchetype:
@@ -68,9 +71,10 @@ class MetaIntelligenceService:
     def __init__(self):
         self.cache: Dict[str, MetaSnapshot] = {}
         try:
-            self.cache_duration = int(os.getenv("META_UPDATE_FREQUENCY", "24")) * 3600
+            self.cache_duration = int(os.getenv("META_UPDATE_FREQUENCY", "24")) * SECONDS_PER_HOUR
         except ValueError as e:
             env_val = os.getenv('META_UPDATE_FREQUENCY', "24")
+            logger.error(f"Invalid META_UPDATE_FREQUENCY: '{env_val}' is not a valid integer.")
             raise ValueError(
                 f"Invalid META_UPDATE_FREQUENCY: '{env_val}' is not a valid integer."
             ) from e
@@ -89,7 +93,7 @@ class MetaIntelligenceService:
         cache_key = f"meta_{format.lower()}"
         if cache_key in self.cache:
             cached = self.cache[cache_key]
-            cache_time = datetime.fromisoformat(cached.timestamp)
+            cache_time: datetime = datetime.fromisoformat(cached.timestamp)
             if cache_time.tzinfo is None:
                 cache_time = cache_time.replace(tzinfo=timezone.utc)
                 logger.debug("Cache timestamp was naive, converted to UTC")
