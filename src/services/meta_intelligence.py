@@ -69,8 +69,8 @@ class MetaIntelligenceService:
         self.cache: Dict[str, MetaSnapshot] = {}
         try:
             self.cache_duration = int(os.getenv("META_UPDATE_FREQUENCY", "24")) * 3600
-        except (ValueError, TypeError):
-            raise ValueError(f"Invalid META_UPDATE_FREQUENCY: '{os.getenv('META_UPDATE_FREQUENCY')}' must be a valid integer")
+        except ValueError:
+            raise ValueError(f"Invalid META_UPDATE_FREQUENCY: '{os.getenv('META_UPDATE_FREQUENCY')}' is not a valid integer.")
         self.meta_sources = os.getenv(
             "META_SOURCES",
             "https://www.mtggoldfish.com/metagame/standard,https://aetherhub.com/Metagame/Standard-BO3"
@@ -440,12 +440,57 @@ class MetaIntelligenceService:
             "combo": {"aggro": 50, "midrange": 48, "control": 52, "combo": 50}
         }
 
-        # Extract strategy types (simplified)
-        player_type = "midrange"  # default
-        for strat in matchup_matrix.keys():
-            if strat in player_archetype.lower():
-                player_type = strat
-                break
+        # Explicit mapping from archetype name to strategy type for known archetypes
+        # Updated for November 2025 MTG Arena Standard meta
+        strategy_map = {
+            # Current Tier 1 Archetypes (November 2025)
+            "Mono-Red Aggro": "aggro",
+            "Izzet Cauldron": "combo",
+            "Dimir Midrange": "midrange",
+            "Simic Aggro": "aggro",
+            "Simic Omniscience": "combo",
+            "Jeskai Artifacts": "midrange",
+            "Jeskai Control": "control",
+            "4 Color Control": "control",
+            "4C Control": "control",
+            "Sultai Reanimator": "combo",
+            "Grixis Reanimator": "combo",
+            "Gruul Aggro": "aggro",
+            "Mono-Green Landfall": "aggro",
+            "Mono-Black Demons": "midrange",
+            "Azorius Control": "control",
+            "Orzhov Lifegain": "midrange",
+            "Temur Battlecrier": "aggro",
+            # Legacy/Common Archetypes
+            "Boros Convoke": "aggro",
+            "Domain Ramp": "control",
+            "Esper Legends": "midrange",
+        }
+        
+        # Check explicit map first
+        if player_archetype in strategy_map:
+            player_type = strategy_map[player_archetype]
+        else:
+            # Fallback: detect strategy type from archetype name using keyword matching
+            # Priority order: control > combo > aggro > midrange (most to least specific)
+            archetype_lower = player_archetype.lower()
+            if "control" in archetype_lower:
+                player_type = "control"
+            elif "combo" in archetype_lower:
+                player_type = "combo"
+            elif "aggro" in archetype_lower or "aggressive" in archetype_lower:
+                player_type = "aggro"
+            elif "midrange" in archetype_lower or "mid-range" in archetype_lower:
+                player_type = "midrange"
+            elif "tempo" in archetype_lower:
+                # Tempo decks are typically aggro-control hybrids, lean aggro
+                player_type = "aggro"
+            elif "ramp" in archetype_lower:
+                # Ramp decks typically lean control
+                player_type = "control"
+            else:
+                # Default to midrange for unknown archetypes
+                player_type = "midrange"
 
         return matchup_matrix.get(player_type, {}).get(opponent.strategy_type, 50.0)
 
