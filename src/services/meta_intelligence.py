@@ -410,7 +410,7 @@ class MetaIntelligenceService:
             "combo": {"aggro": 50, "midrange": 48, "control": 52, "combo": 50}
         }
 
-        # Explicit mapping from archetype name to strategy type
+        # Explicit mapping from archetype name to strategy type for known archetypes
         strategy_map = {
             "Dimir Midrange": "midrange",
             "Boros Convoke": "aggro",
@@ -419,7 +419,31 @@ class MetaIntelligenceService:
             "Esper Legends": "midrange",
             "Azorius Control": "control",
         }
-        player_type = strategy_map.get(player_archetype, "midrange")
+        
+        # Check explicit map first
+        if player_archetype in strategy_map:
+            player_type = strategy_map[player_archetype]
+        else:
+            # Fallback: detect strategy type from archetype name using keyword matching
+            # Priority order: control > combo > aggro > midrange (most to least specific)
+            archetype_lower = player_archetype.lower()
+            if "control" in archetype_lower:
+                player_type = "control"
+            elif "combo" in archetype_lower:
+                player_type = "combo"
+            elif "aggro" in archetype_lower or "aggressive" in archetype_lower:
+                player_type = "aggro"
+            elif "midrange" in archetype_lower or "mid-range" in archetype_lower:
+                player_type = "midrange"
+            elif "tempo" in archetype_lower:
+                # Tempo decks are typically aggro-control hybrids, lean aggro
+                player_type = "aggro"
+            elif "ramp" in archetype_lower:
+                # Ramp decks typically lean control
+                player_type = "control"
+            else:
+                # Default to midrange for unknown archetypes
+                player_type = "midrange"
 
         return matchup_matrix.get(player_type, {}).get(opponent.strategy_type, 50.0)
 
