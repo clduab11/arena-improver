@@ -84,7 +84,7 @@ class MetaIntelligenceService:
         if cache_key in self.cache:
             cached = self.cache[cache_key]
             cache_time = datetime.fromisoformat(cached.timestamp)
-            if (datetime.utcnow() - cache_time).total_seconds() < self.cache_duration:
+            if (datetime.now(timezone.utc) - cache_time).total_seconds() < self.cache_duration:
                 return cached
 
         # Fetch fresh data using MCPs
