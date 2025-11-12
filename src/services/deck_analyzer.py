@@ -157,7 +157,17 @@ class DeckAnalyzer:
         return None
     
     async def _analyze_meta_matchups(self, deck: Deck) -> List[MetaMatchup]:
-        """Analyze matchups against meta archetypes using real-time meta data."""
+        """Analyze matchups against meta archetypes using real-time meta data.
+        
+        Returns:
+            List[MetaMatchup]: List of matchups. Returns cached matchups if live fetch 
+            fails and cache is available, or empty list if no cache exists.
+            
+        Note:
+            Attempts to use cached meta data as fallback when live fetch fails.
+            Returns empty list only when both live fetch and cache fallback fail.
+            Check logs for error details.
+        """
         matchups = []
 
         # Fetch current meta data
@@ -178,7 +188,25 @@ class DeckAnalyzer:
                 matchups.append(matchup)
         except Exception as e:
             logger.warning("Could not fetch meta data: %s", e, exc_info=True)
-            # Return empty or use fallback heuristics
+            # Check if we have cached data we can use
+            cache_key = f"meta_{deck.format.lower()}"
+            if hasattr(self.meta_service, 'cache') and cache_key in self.meta_service.cache:
+                logger.info("Using cached meta data as fallback")
+                cached = self.meta_service.cache[cache_key]
+                for archetype in cached.archetypes:
+                    win_rate = self._estimate_matchup_winrate_enhanced(deck, archetype)
+                    favorable = win_rate >= 50.0
+
+                    matchup = MetaMatchup(
+                        archetype=archetype.name,
+                        win_rate=win_rate,
+                        favorable=favorable,
+                        key_cards=archetype.key_cards[:5],
+                        sideboard_suggestions=[]
+                    )
+                    matchups.append(matchup)
+            else:
+                logger.error("No cached meta data available for fallback")
 
         return matchups
     

@@ -38,6 +38,7 @@ curl -X POST "http://localhost:8000/api/v1/upload/csv" \
 
 ```python
 # Using the MCP tool with async file I/O
+# Note: Install aiofiles first: pip install aiofiles
 import aiofiles
 
 async with aiofiles.open("my_deck.csv", mode='r') as f:

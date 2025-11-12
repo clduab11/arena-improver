@@ -69,8 +69,11 @@ class MetaIntelligenceService:
         self.cache: Dict[str, MetaSnapshot] = {}
         try:
             self.cache_duration = int(os.getenv("META_UPDATE_FREQUENCY", "24")) * 3600
-        except ValueError:
-            raise ValueError(f"Invalid META_UPDATE_FREQUENCY: '{os.getenv('META_UPDATE_FREQUENCY')}' is not a valid integer.")
+        except ValueError as e:
+            env_val = os.getenv('META_UPDATE_FREQUENCY', "24")
+            raise ValueError(
+                f"Invalid META_UPDATE_FREQUENCY: '{env_val}' is not a valid integer."
+            ) from e
         self.meta_sources = os.getenv(
             "META_SOURCES",
             "https://www.mtggoldfish.com/metagame/standard,https://aetherhub.com/Metagame/Standard-BO3"
@@ -89,6 +92,10 @@ class MetaIntelligenceService:
             cache_time = datetime.fromisoformat(cached.timestamp)
             if cache_time.tzinfo is None:
                 cache_time = cache_time.replace(tzinfo=timezone.utc)
+                logger.debug("Cache timestamp was naive, converted to UTC")
+            elif cache_time.tzinfo != timezone.utc:
+                cache_time = cache_time.astimezone(timezone.utc)
+                logger.debug("Cache timestamp converted from %s to UTC", cache_time.tzinfo.tzname(cache_time))
             if (datetime.now(timezone.utc) - cache_time).total_seconds() < self.cache_duration:
                 return cached
 

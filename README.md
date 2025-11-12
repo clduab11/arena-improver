@@ -236,9 +236,12 @@ asyncio.run(analyze_my_deck())
 
 ```python
 import asyncio
+import logging
 from src.services.meta_intelligence import MetaIntelligenceService
 from src.services.deck_analyzer import DeckAnalyzer
 from src.services.smart_sql import SmartSQLService
+
+logger = logging.getLogger(__name__)
 
 async def meta_aware_analysis():
     # Get current meta snapshot
@@ -253,7 +256,11 @@ async def meta_aware_analysis():
     # Analyze deck against current meta
     analyzer = DeckAnalyzer(meta_service=meta_service)
     sql_service = SmartSQLService()
-    await sql_service.init_db()
+    try:
+        await sql_service.init_db()
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
+        raise
     deck = await sql_service.get_deck(1)
     analysis = await analyzer.analyze_deck(deck)
 
@@ -297,7 +304,7 @@ import asyncio
 from src.services.meta_intelligence import MetaIntelligenceService
 
 # Automatic meta data fetching
-async def example():
+async def example_meta_analysis():
     meta_service = MetaIntelligenceService()
     snapshot = await meta_service.get_current_meta("Standard")
     
@@ -309,7 +316,7 @@ async def example():
     
     return snapshot
 
-asyncio.run(example())
+asyncio.run(example_meta_analysis())
 ```
 
 ### Sequential Thinking for Complex Decisions
