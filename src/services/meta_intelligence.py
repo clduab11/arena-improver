@@ -65,6 +65,7 @@ class MetaIntelligenceService:
     def __init__(self):
         self.cache: Dict[str, MetaSnapshot] = {}
         try:
+            self.cache_duration = int(os.getenv("META_UPDATE_FREQUENCY", "24")) * 3600
         except ValueError:
             raise ValueError(f"Invalid META_UPDATE_FREQUENCY: '{os.getenv('META_UPDATE_FREQUENCY')}' is not a valid integer.")
         self.meta_sources = os.getenv(
@@ -409,12 +410,16 @@ class MetaIntelligenceService:
             "combo": {"aggro": 50, "midrange": 48, "control": 52, "combo": 50}
         }
 
-        # Extract strategy types (simplified)
-        player_type = "midrange"  # default
-        for strat in matchup_matrix.keys():
-            if strat in player_archetype.lower():
-                player_type = strat
-                break
+        # Explicit mapping from archetype name to strategy type
+        strategy_map = {
+            "Dimir Midrange": "midrange",
+            "Boros Convoke": "aggro",
+            "Domain Ramp": "control",
+            "Mono-Red Aggro": "aggro",
+            "Esper Legends": "midrange",
+            "Azorius Control": "control",
+        }
+        player_type = strategy_map.get(player_archetype, "midrange")
 
         return matchup_matrix.get(player_type, {}).get(opponent.strategy_type, 50.0)
 
