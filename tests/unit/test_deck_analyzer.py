@@ -22,10 +22,11 @@ def sample_deck():
     return Deck(name="Mono-Red Aggro", format="Standard", mainboard=cards)
 
 
-def test_analyze_deck(sample_deck):
+@pytest.mark.asyncio
+async def test_analyze_deck(sample_deck):
     """Test basic deck analysis."""
     analyzer = DeckAnalyzer()
-    analysis = analyzer.analyze_deck(sample_deck)
+    analysis = await analyzer.analyze_deck(sample_deck)
     
     assert analysis.deck_name == "Mono-Red Aggro"
     assert "R" in analysis.color_distribution
@@ -34,10 +35,11 @@ def test_analyze_deck(sample_deck):
     assert analysis.overall_score > 0
 
 
-def test_mana_curve_analysis(sample_deck):
+@pytest.mark.asyncio
+async def test_mana_curve_analysis(sample_deck):
     """Test mana curve analysis."""
     analyzer = DeckAnalyzer()
-    analysis = analyzer.analyze_deck(sample_deck)
+    analysis = await analyzer.analyze_deck(sample_deck)
     
     assert analysis.mana_curve.average_cmc > 0
     assert analysis.mana_curve.curve_score >= 0
@@ -46,19 +48,21 @@ def test_mana_curve_analysis(sample_deck):
     assert 3 in analysis.mana_curve.distribution
 
 
-def test_color_distribution(sample_deck):
+@pytest.mark.asyncio
+async def test_color_distribution(sample_deck):
     """Test color distribution analysis."""
     analyzer = DeckAnalyzer()
-    analysis = analyzer.analyze_deck(sample_deck)
+    analysis = await analyzer.analyze_deck(sample_deck)
     
     assert len(analysis.color_distribution) == 1
     assert analysis.color_distribution["R"] == 12  # 4+4+4
 
 
-def test_strengths_weaknesses(sample_deck):
+@pytest.mark.asyncio
+async def test_strengths_weaknesses(sample_deck):
     """Test strength and weakness identification."""
     analyzer = DeckAnalyzer()
-    analysis = analyzer.analyze_deck(sample_deck)
+    analysis = await analyzer.analyze_deck(sample_deck)
     
     assert len(analysis.strengths) > 0
     # Mono-colored should be identified as strength

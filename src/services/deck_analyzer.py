@@ -2,6 +2,7 @@
 
 from typing import List, Dict, Optional
 import statistics
+import logging
 
 from ..models.deck import (
     Deck, Card, DeckAnalysis, ManaCurve, CardSynergy,
@@ -9,13 +10,22 @@ from ..models.deck import (
 )
 from .meta_intelligence import MetaIntelligenceService
 
+logger = logging.getLogger(__name__)
+
 
 class DeckAnalyzer:
     """Analyzes MTG Arena decks for optimization opportunities."""
 
     def __init__(self, meta_service: Optional[MetaIntelligenceService] = None):
-        self.meta_service = meta_service or MetaIntelligenceService()
+        self._meta_service = meta_service
         self.meta_archetypes = []  # Will be loaded dynamically
+    
+    @property
+    def meta_service(self) -> MetaIntelligenceService:
+        """Lazy initialization of MetaIntelligenceService."""
+        if self._meta_service is None:
+            self._meta_service = MetaIntelligenceService()
+        return self._meta_service
     
     async def analyze_deck(self, deck: Deck) -> DeckAnalysis:
         """Perform comprehensive deck analysis."""
@@ -167,12 +177,21 @@ class DeckAnalyzer:
                 )
                 matchups.append(matchup)
         except Exception as e:
-            # A logger should be injected into the class instance.
-            # For this example, we'll import it directly.
-            import logging
-            logging.warning("Could not fetch meta data: %s", e, exc_info=True)
-            # Return empty or use fallback heuristics
-            pass
+            logger.warning("Could not fetch meta data, using fallback archetypes: %s", e, exc_info=True)
+            # Use fallback archetypes
+            fallback_archetypes = self.meta_service._get_fallback_archetypes(deck.format)
+            for archetype in fallback_archetypes:
+                win_rate = self._estimate_matchup_winrate_enhanced(deck, archetype)
+                favorable = win_rate >= 50.0
+
+                matchup = MetaMatchup(
+                    archetype=archetype.name,
+                    win_rate=win_rate,
+                    favorable=favorable,
+                    key_cards=archetype.key_cards[:5],
+                    sideboard_suggestions=[]
+                )
+                matchups.append(matchup)
 
         return matchups
     
@@ -187,10 +206,10 @@ class DeckAnalyzer:
         base_rate = 50.0
 
         # Identify deck strategy type based on mana curve and card types
+        non_land_cards = sum(card.quantity for card in deck.mainboard
+                            if card.card_type.lower() != 'land')
         avg_cmc = sum(card.cmc * card.quantity for card in deck.mainboard
-                     if card.card_type.lower() != 'land') / max(1, sum(
-                         card.quantity for card in deck.mainboard
-                         if card.card_type.lower() != 'land'))
+                     if card.card_type.lower() != 'land') / max(1, non_land_cards)
 
         deck_strategy = self._identify_deck_strategy(deck, avg_cmc)
 
