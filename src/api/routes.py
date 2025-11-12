@@ -139,7 +139,7 @@ async def analyze_deck(deck_id: int):
         raise HTTPException(status_code=404, detail="Deck not found")
     
     # Perform analysis
-    analysis = analyzer.analyze_deck(deck)
+    analysis = await analyzer.analyze_deck(deck)
     
     return analysis
 
@@ -158,7 +158,7 @@ async def optimize_deck(deck_id: int):
         raise HTTPException(status_code=404, detail="Deck not found")
     
     # Perform analysis
-    analysis = analyzer.analyze_deck(deck)
+    analysis = await analyzer.analyze_deck(deck)
     
     # Generate suggestions
     suggestions = await inference_service.generate_suggestions(deck, analysis)
