@@ -9,6 +9,7 @@ from ..models.deck import (
     MetaMatchup
 )
 from .meta_intelligence import MetaIntelligenceService
+from ..exceptions import MetaDataUnavailableError
 
 logger = logging.getLogger(__name__)
 
@@ -161,11 +162,13 @@ class DeckAnalyzer:
         
         Returns:
             List[MetaMatchup]: List of matchups. Returns cached matchups if live fetch 
-            fails and cache is available, or empty list if no cache exists.
+            fails and cache is available.
+            
+        Raises:
+            MetaDataUnavailableError: When both live fetch and cache fallback fail.
             
         Note:
             Attempts to use cached meta data as fallback when live fetch fails.
-            Returns empty list only when both live fetch and cache fallback fail.
             Check logs for error details.
         """
         matchups = []
@@ -207,6 +210,9 @@ class DeckAnalyzer:
                     matchups.append(matchup)
             else:
                 logger.error("No cached meta data available for fallback")
+                raise MetaDataUnavailableError(
+                    "Unable to fetch meta data and no cache available"
+                )
 
         return matchups
     
