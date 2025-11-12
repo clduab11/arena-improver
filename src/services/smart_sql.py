@@ -186,3 +186,7 @@ class SmartSQLService:
                 }
                 for perf in performances
             ]
+    
+    async def close(self):
+        """Close the database engine and cleanup resources."""
+        await self.engine.dispose()

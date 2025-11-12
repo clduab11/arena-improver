@@ -236,8 +236,12 @@ asyncio.run(analyze_my_deck())
 
 ```python
 import asyncio
+import logging
 from src.services.meta_intelligence import MetaIntelligenceService
 from src.services.deck_analyzer import DeckAnalyzer
+from src.services.smart_sql import SmartSQLService
+
+logger = logging.getLogger(__name__)
 
 async def meta_aware_analysis():
     # Get current meta snapshot
@@ -251,13 +255,21 @@ async def meta_aware_analysis():
 
     # Analyze deck against current meta
     analyzer = DeckAnalyzer(meta_service=meta_service)
-    deck = await sql_service.get_deck(1)
-    analysis = await analyzer.analyze_deck(deck)
+    sql_service = SmartSQLService()
+    try:
+        await sql_service.init_db()
+        deck = await sql_service.get_deck(1)
+        analysis = await analyzer.analyze_deck(deck)
 
-    print(f"\nYour Deck vs. Meta:")
-    for matchup in analysis.meta_matchups:
-        status = "✓ Favorable" if matchup.favorable else "✗ Unfavorable"
-        print(f"{status} vs {matchup.archetype}: {matchup.win_rate}%")
+        print(f"\nYour Deck vs. Meta:")
+        for matchup in analysis.meta_matchups:
+            status = "✓ Favorable" if matchup.favorable else "✗ Unfavorable"
+            print(f"{status} vs {matchup.archetype}: {matchup.win_rate}%")
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
+        raise
+    finally:
+        await sql_service.close()
 
 asyncio.run(meta_aware_analysis())
 ```
@@ -293,18 +305,20 @@ Arena Improver uses **Tavily and Exa MCPs** to fetch live meta data:
 import asyncio
 from src.services.meta_intelligence import MetaIntelligenceService
 
-async def main():
-    # Automatic meta data fetching
+# Automatic meta data fetching
+async def example_meta_analysis():
     meta_service = MetaIntelligenceService()
     snapshot = await meta_service.get_current_meta("Standard")
-
+    
     # Access live data:
     # - Current meta shares from MTGGoldfish
     # - Tournament results and winning decklists
     # - Ban list updates
     # - Emerging archetypes
+    
+    return snapshot
 
-asyncio.run(main())
+asyncio.run(example_meta_analysis())
 ```
 
 ### Sequential Thinking for Complex Decisions

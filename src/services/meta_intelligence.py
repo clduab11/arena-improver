@@ -16,6 +16,9 @@ from ..models.deck import Deck
 
 logger = logging.getLogger(__name__)
 
+# Constants
+SECONDS_PER_HOUR = 3600
+
 
 @dataclass
 class MetaArchetype:
@@ -68,9 +71,13 @@ class MetaIntelligenceService:
     def __init__(self):
         self.cache: Dict[str, MetaSnapshot] = {}
         try:
-            self.cache_duration = int(os.getenv("META_UPDATE_FREQUENCY", "24")) * 3600
-        except (ValueError, TypeError):
-            raise ValueError(f"Invalid META_UPDATE_FREQUENCY: '{os.getenv('META_UPDATE_FREQUENCY')}' must be a valid integer")
+            self.cache_duration = int(os.getenv("META_UPDATE_FREQUENCY", "24")) * SECONDS_PER_HOUR
+        except ValueError as e:
+            env_val = os.getenv('META_UPDATE_FREQUENCY', "24")
+            logger.error(f"Invalid META_UPDATE_FREQUENCY: '{env_val}' is not a valid integer.")
+            raise ValueError(
+                f"Invalid META_UPDATE_FREQUENCY: '{env_val}' is not a valid integer."
+            ) from e
         self.meta_sources = os.getenv(
             "META_SOURCES",
             "https://www.mtggoldfish.com/metagame/standard,https://aetherhub.com/Metagame/Standard-BO3"
@@ -86,9 +93,13 @@ class MetaIntelligenceService:
         cache_key = f"meta_{format.lower()}"
         if cache_key in self.cache:
             cached = self.cache[cache_key]
-            cache_time = datetime.fromisoformat(cached.timestamp)
-            if not cache_time.tzinfo:
+            cache_time: datetime = datetime.fromisoformat(cached.timestamp)
+            if cache_time.tzinfo is None:
                 cache_time = cache_time.replace(tzinfo=timezone.utc)
+                logger.debug("Cache timestamp was naive, converted to UTC")
+            elif cache_time.tzinfo != timezone.utc:
+                cache_time = cache_time.astimezone(timezone.utc)
+                logger.debug("Cache timestamp converted from %s to UTC", cache_time.tzinfo.tzname(cache_time))
             if (datetime.now(timezone.utc) - cache_time).total_seconds() < self.cache_duration:
                 return cached
 
@@ -149,7 +160,7 @@ class MetaIntelligenceService:
                     "Can struggle against control"
                 ],
                 source="mtggoldfish.com",
-                last_updated=datetime.utcnow().isoformat()
+                last_updated=datetime.now(timezone.utc).isoformat()
             ),
             MetaArchetype(
                 name="Boros Convoke",
@@ -175,7 +186,7 @@ class MetaIntelligenceService:
                     "Limited reach in late game"
                 ],
                 source="aetherhub.com",
-                last_updated=datetime.utcnow().isoformat()
+                last_updated=datetime.now(timezone.utc).isoformat()
             ),
             MetaArchetype(
                 name="Domain Ramp",
@@ -201,7 +212,7 @@ class MetaIntelligenceService:
                     "Weak to mana denial"
                 ],
                 source="mtggoldfish.com",
-                last_updated=datetime.utcnow().isoformat()
+                last_updated=datetime.now(timezone.utc).isoformat()
             ),
             MetaArchetype(
                 name="Mono-Red Aggro",
@@ -227,7 +238,7 @@ class MetaIntelligenceService:
                     "Struggles against early blockers"
                 ],
                 source="mtggoldfish.com",
-                last_updated=datetime.utcnow().isoformat()
+                last_updated=datetime.now(timezone.utc).isoformat()
             ),
             MetaArchetype(
                 name="Esper Legends",
@@ -253,7 +264,7 @@ class MetaIntelligenceService:
                     "Can be outvalued by dedicated control"
                 ],
                 source="aetherhub.com",
-                last_updated=datetime.utcnow().isoformat()
+                last_updated=datetime.now(timezone.utc).isoformat()
             ),
             MetaArchetype(
                 name="Azorius Control",
@@ -279,7 +290,7 @@ class MetaIntelligenceService:
                     "Struggles with recursive threats"
                 ],
                 source="mtggoldfish.com",
-                last_updated=datetime.utcnow().isoformat()
+                last_updated=datetime.now(timezone.utc).isoformat()
             )
         ]
 
@@ -292,7 +303,7 @@ class MetaIntelligenceService:
         return [
             TournamentResult(
                 event_name="Pro Tour Thunder Junction",
-                date=(datetime.utcnow() - timedelta(days=5)).isoformat(),
+                date=(datetime.now(timezone.utc) - timedelta(days=5)).isoformat(),
                 format=format,
                 winning_deck="Boros Convoke",
                 archetype="aggro",
@@ -300,7 +311,7 @@ class MetaIntelligenceService:
             ),
             TournamentResult(
                 event_name="Arena Championship 6",
-                date=(datetime.utcnow() - timedelta(days=12)).isoformat(),
+                date=(datetime.now(timezone.utc) - timedelta(days=12)).isoformat(),
                 format=format,
                 winning_deck="Dimir Midrange",
                 archetype="midrange"
@@ -326,6 +337,18 @@ class MetaIntelligenceService:
         self, archetypes: List[MetaArchetype]
     ) -> Dict[str, Any]:
         """Analyze meta trends from archetype data."""
+        # Guard against empty archetypes
+        if not archetypes:
+            return {
+                "total_archetypes": 0,
+                "covered_meta_share": 0.0,
+                "strategy_distribution": {},
+                "dominant_strategy": None,
+                "dominant_strategy_share": 0.0,
+                "avg_winrates_by_strategy": {},
+                "meta_health": self._assess_meta_health([])
+            }
+
         total_share = sum(arch.meta_share for arch in archetypes)
 
         # Calculate strategy type distribution
@@ -333,6 +356,18 @@ class MetaIntelligenceService:
         for arch in archetypes:
             strategy_distribution[arch.strategy_type] = \
                 strategy_distribution.get(arch.strategy_type, 0) + arch.meta_share
+
+        # Guard against empty strategy distribution
+        if not strategy_distribution:
+            return {
+                "total_archetypes": len(archetypes),
+                "covered_meta_share": round(total_share, 2),
+                "strategy_distribution": {},
+                "dominant_strategy": None,
+                "dominant_strategy_share": 0.0,
+                "avg_winrates_by_strategy": {},
+                "meta_health": self._assess_meta_health(archetypes)
+            }
 
         # Identify dominant strategy
         dominant_strategy = max(strategy_distribution.items(), key=lambda x: x[1], default=(None, 0.0))
@@ -350,6 +385,7 @@ class MetaIntelligenceService:
         avg_strategy_winrates = {
             strat: strategy_winrates[strat] / strategy_counts[strat]
             for strat in strategy_winrates
+            if strategy_counts[strat] > 0
         }
 
         return {
@@ -415,12 +451,57 @@ class MetaIntelligenceService:
             "combo": {"aggro": 50, "midrange": 48, "control": 52, "combo": 50}
         }
 
-        # Extract strategy types (simplified)
-        player_type = "midrange"  # default
-        for strat in matchup_matrix.keys():
-            if strat in player_archetype.lower():
-                player_type = strat
-                break
+        # Explicit mapping from archetype name to strategy type for known archetypes
+        # Updated for November 2025 MTG Arena Standard meta
+        strategy_map = {
+            # Current Tier 1 Archetypes (November 2025)
+            "Mono-Red Aggro": "aggro",
+            "Izzet Cauldron": "combo",
+            "Dimir Midrange": "midrange",
+            "Simic Aggro": "aggro",
+            "Simic Omniscience": "combo",
+            "Jeskai Artifacts": "midrange",
+            "Jeskai Control": "control",
+            "4 Color Control": "control",
+            "4C Control": "control",
+            "Sultai Reanimator": "combo",
+            "Grixis Reanimator": "combo",
+            "Gruul Aggro": "aggro",
+            "Mono-Green Landfall": "aggro",
+            "Mono-Black Demons": "midrange",
+            "Azorius Control": "control",
+            "Orzhov Lifegain": "midrange",
+            "Temur Battlecrier": "aggro",
+            # Legacy/Common Archetypes
+            "Boros Convoke": "aggro",
+            "Domain Ramp": "control",
+            "Esper Legends": "midrange",
+        }
+        
+        # Check explicit map first
+        if player_archetype in strategy_map:
+            player_type = strategy_map[player_archetype]
+        else:
+            # Fallback: detect strategy type from archetype name using keyword matching
+            # Priority order: control > combo > aggro > midrange (most to least specific)
+            archetype_lower = player_archetype.lower()
+            if "control" in archetype_lower:
+                player_type = "control"
+            elif "combo" in archetype_lower:
+                player_type = "combo"
+            elif "aggro" in archetype_lower or "aggressive" in archetype_lower:
+                player_type = "aggro"
+            elif "midrange" in archetype_lower or "mid-range" in archetype_lower:
+                player_type = "midrange"
+            elif "tempo" in archetype_lower:
+                # Tempo decks are typically aggro-control hybrids, lean aggro
+                player_type = "aggro"
+            elif "ramp" in archetype_lower:
+                # Ramp decks typically lean control
+                player_type = "control"
+            else:
+                # Default to midrange for unknown archetypes
+                player_type = "midrange"
 
         return matchup_matrix.get(player_type, {}).get(opponent.strategy_type, 50.0)
 

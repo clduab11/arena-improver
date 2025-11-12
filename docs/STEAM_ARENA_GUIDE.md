@@ -37,10 +37,15 @@ curl -X POST "http://localhost:8000/api/v1/upload/csv" \
 ### Example Upload via MCP
 
 ```python
-# Using the MCP tool
-result = await mcp_tool("parse_deck_csv", {
-    "csv_content": open("my_deck.csv").read()
-})
+# Using the MCP tool with async file I/O
+# Note: Install aiofiles first: pip install aiofiles
+import aiofiles
+
+async with aiofiles.open("my_deck.csv", mode='r') as f:
+    csv_content = await f.read()
+    result = await mcp_tool("parse_deck_csv", {
+        "csv_content": csv_content
+    })
 ```
 
 ## Steam-Specific Considerations
@@ -122,14 +127,78 @@ result = await mcp_tool("parse_deck_csv", {
 
 ## Integration with Arena Improver Features
 
+### Prerequisites
+
+Before running the code examples below, ensure you have the necessary services initialized. The following code uses async/await and should be placed inside an async function or executed using `asyncio.run()` (see `examples/example_workflow.py` for a complete example):
+
+```python
+import asyncio
+from src.services.meta_intelligence import MetaIntelligenceService
+from src.services.smart_sql import SmartSQLService
+
+async def main():
+    # Initialize services
+    meta_service = MetaIntelligenceService()
+    sql_service = SmartSQLService()
+    
+    # Initialize the database (creates tables if they don't exist)
+    await sql_service.init_db()
+    
+    # Your code using the services goes here
+    # ...
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+### Error Handling Best Practices
+
+When working with Arena Improver services, proper error handling is essential for robust applications:
+
+```python
+import asyncio
+import logging
+from src.services.meta_intelligence import MetaIntelligenceService
+from src.services.smart_sql import SmartSQLService
+from src.exceptions import MetaDataUnavailableError
+
+logger = logging.getLogger(__name__)
+
+async def main():
+    meta_service = MetaIntelligenceService()
+    sql_service = SmartSQLService()
+    
+    try:
+        # Initialize database with error handling
+        await sql_service.init_db()
+    except Exception as e:
+        logger.error(f"Database initialization failed: {e}")
+        return
+    
+    try:
+        # Fetch meta data with fallback handling
+        snapshot = await meta_service.get_current_meta("Standard")
+        print(f"Top archetype: {snapshot.archetypes[0].name}")
+    except MetaDataUnavailableError as e:
+        logger.warning(f"Meta data unavailable: {e}")
+        # Handle gracefully - use cached data or continue without meta analysis
+        print("Proceeding without current meta data")
+    except Exception as e:
+        logger.error(f"Unexpected error fetching meta data: {e}")
+    finally:
+        # Always cleanup resources
+        await sql_service.close()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
 ### Real-Time Meta Analysis
 
 Arena Improver uses MCP tools to fetch current meta data specific to Arena:
 
 ```python
-from src.services.meta_intelligence import MetaIntelligenceService
-
-meta_service = MetaIntelligenceService()
+# Assuming meta_service is initialized (see Prerequisites above)
 snapshot = await meta_service.get_current_meta("Standard")
 
 print(f"Current top archetype: {snapshot.archetypes[0].name}")
@@ -155,6 +224,7 @@ This enables:
 Track your performance specifically on Steam:
 
 ```python
+# Assuming sql_service is initialized (see Prerequisites above)
 await sql_service.record_performance(
     deck_id=1,
     opponent_archetype="Boros Convoke",
@@ -170,6 +240,7 @@ await sql_service.record_performance(
 Use the MetaIntelligenceService for strategy decisions:
 
 ```python
+# Assuming meta_service is initialized (see Prerequisites above)
 # Get matchup data for your deck
 matchups = await meta_service.get_archetype_matchup_data(
     deck_archetype="Dimir Midrange",
