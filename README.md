@@ -238,6 +238,7 @@ asyncio.run(analyze_my_deck())
 import asyncio
 from src.services.meta_intelligence import MetaIntelligenceService
 from src.services.deck_analyzer import DeckAnalyzer
+from src.services.smart_sql import SmartSQLService
 
 async def meta_aware_analysis():
     # Get current meta snapshot
@@ -251,6 +252,8 @@ async def meta_aware_analysis():
 
     # Analyze deck against current meta
     analyzer = DeckAnalyzer(meta_service=meta_service)
+    sql_service = SmartSQLService()
+    await sql_service.init_db()
     deck = await sql_service.get_deck(1)
     analysis = await analyzer.analyze_deck(deck)
 

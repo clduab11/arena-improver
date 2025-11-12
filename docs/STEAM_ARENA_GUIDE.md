@@ -37,10 +37,14 @@ curl -X POST "http://localhost:8000/api/v1/upload/csv" \
 ### Example Upload via MCP
 
 ```python
-# Using the MCP tool
-result = await mcp_tool("parse_deck_csv", {
-    "csv_content": open("my_deck.csv").read()
-})
+# Using the MCP tool with async file I/O
+import aiofiles
+
+async with aiofiles.open("my_deck.csv", mode='r') as f:
+    csv_content = await f.read()
+    result = await mcp_tool("parse_deck_csv", {
+        "csv_content": csv_content
+    })
 ```
 
 ## Steam-Specific Considerations
