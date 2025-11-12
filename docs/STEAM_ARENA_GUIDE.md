@@ -37,23 +37,14 @@ curl -X POST "http://localhost:8000/api/v1/upload/csv" \
 ### Example Upload via MCP
 
 ```python
-# Using the MCP server tools (requires MCP-compatible client like Claude Desktop)
-# The parse_deck_csv tool is exposed by the Arena Improver MCP server
-# Call this from your MCP client with:
-# Tool: parse_deck_csv
-# Arguments: {"csv_content": "<your CSV content>"}
+# Using the MCP tool with async file I/O
+import aiofiles
 
-# Or use the Python services directly:
-from src.utils.csv_parser import parse_arena_csv
-from src.services.smart_sql import SmartSQLService
-
-sql_service = SmartSQLService()
-await sql_service.init_db()
-
-with open("my_deck.csv") as f:
-    deck = parse_arena_csv(f.read())
-    deck_id = await sql_service.store_deck(deck)
-    print(f"Deck stored with ID: {deck_id}")
+async with aiofiles.open("my_deck.csv", mode='r') as f:
+    csv_content = await f.read()
+    result = await mcp_tool("parse_deck_csv", {
+        "csv_content": csv_content
+    })
 ```
 
 ## Steam-Specific Considerations
