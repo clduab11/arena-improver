@@ -291,6 +291,7 @@ Arena Improver uses **Tavily and Exa MCPs** to fetch live meta data:
 
 ```python
 import asyncio
+from src.services.meta_intelligence import MetaIntelligenceService
 
 async def main():
     # Automatic meta data fetching

@@ -6,12 +6,15 @@ tournament results, and professional deck strategies from various sources.
 
 import os
 import json
+import logging
 from typing import List, Dict, Optional, Any
 from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass, asdict
 import asyncio
 
 from ..models.deck import Deck
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -65,8 +68,9 @@ class MetaIntelligenceService:
     def __init__(self):
         self.cache: Dict[str, MetaSnapshot] = {}
         try:
-        except ValueError:
-            raise ValueError(f"Invalid META_UPDATE_FREQUENCY: '{os.getenv('META_UPDATE_FREQUENCY')}' is not a valid integer.")
+            self.cache_duration = int(os.getenv("META_UPDATE_FREQUENCY", "24")) * 3600
+        except (ValueError, TypeError):
+            raise ValueError(f"Invalid META_UPDATE_FREQUENCY: '{os.getenv('META_UPDATE_FREQUENCY')}' must be a valid integer")
         self.meta_sources = os.getenv(
             "META_SOURCES",
             "https://www.mtggoldfish.com/metagame/standard,https://aetherhub.com/Metagame/Standard-BO3"
@@ -83,6 +87,8 @@ class MetaIntelligenceService:
         if cache_key in self.cache:
             cached = self.cache[cache_key]
             cache_time = datetime.fromisoformat(cached.timestamp)
+            if not cache_time.tzinfo:
+                cache_time = cache_time.replace(tzinfo=timezone.utc)
             if (datetime.now(timezone.utc) - cache_time).total_seconds() < self.cache_duration:
                 return cached
 
@@ -454,6 +460,48 @@ class MetaIntelligenceService:
                 "reason": "Good against target archetype",
                 "quantity": 2
             }
+        ]
+
+    def _get_fallback_archetypes(self, format: str) -> List[MetaArchetype]:
+        """Provide fallback archetypes when meta data fetching fails."""
+        logger.info("Using fallback archetypes for %s", format)
+        return [
+            MetaArchetype(
+                name="Generic Aggro",
+                format=format,
+                meta_share=20.0,
+                win_rate=50.0,
+                key_cards=["Aggressive Creature", "Burn Spell"],
+                strategy_type="aggro",
+                strengths=["Fast clock", "Punishes slow decks"],
+                weaknesses=["Runs out of resources", "Vulnerable to sweepers"],
+                source="fallback",
+                last_updated=datetime.now(timezone.utc).isoformat()
+            ),
+            MetaArchetype(
+                name="Generic Midrange",
+                format=format,
+                meta_share=30.0,
+                win_rate=50.0,
+                key_cards=["Value Creature", "Removal Spell"],
+                strategy_type="midrange",
+                strengths=["Flexible gameplay", "Good threats"],
+                weaknesses=["Can be too slow or too fast"],
+                source="fallback",
+                last_updated=datetime.now(timezone.utc).isoformat()
+            ),
+            MetaArchetype(
+                name="Generic Control",
+                format=format,
+                meta_share=25.0,
+                win_rate=50.0,
+                key_cards=["Counterspell", "Board Wipe"],
+                strategy_type="control",
+                strengths=["Strong late game", "Answers to threats"],
+                weaknesses=["Vulnerable to aggro", "Resource-intensive"],
+                source="fallback",
+                last_updated=datetime.now(timezone.utc).isoformat()
+            )
         ]
 
     def to_dict(self, meta: MetaSnapshot) -> dict:
