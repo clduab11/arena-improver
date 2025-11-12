@@ -167,8 +167,10 @@ class DeckAnalyzer:
                 )
                 matchups.append(matchup)
         except Exception as e:
-            # Fallback to basic analysis if meta fetch fails
-            print(f"Warning: Could not fetch meta data: {e}")
+            # A logger should be injected into the class instance.
+            # For this example, we'll import it directly.
+            import logging
+            logging.warning("Could not fetch meta data: %s", e, exc_info=True)
             # Return empty or use fallback heuristics
             pass
 
