@@ -318,6 +318,18 @@ class MetaIntelligenceService:
         self, archetypes: List[MetaArchetype]
     ) -> Dict[str, Any]:
         """Analyze meta trends from archetype data."""
+        # Guard against empty archetypes
+        if not archetypes:
+            return {
+                "total_archetypes": 0,
+                "covered_meta_share": 0.0,
+                "strategy_distribution": {},
+                "dominant_strategy": None,
+                "dominant_strategy_share": 0.0,
+                "avg_winrates_by_strategy": {},
+                "meta_health": self._assess_meta_health([])
+            }
+
         total_share = sum(arch.meta_share for arch in archetypes)
 
         # Calculate strategy type distribution
@@ -325,6 +337,18 @@ class MetaIntelligenceService:
         for arch in archetypes:
             strategy_distribution[arch.strategy_type] = \
                 strategy_distribution.get(arch.strategy_type, 0) + arch.meta_share
+
+        # Guard against empty strategy distribution
+        if not strategy_distribution:
+            return {
+                "total_archetypes": len(archetypes),
+                "covered_meta_share": round(total_share, 2),
+                "strategy_distribution": {},
+                "dominant_strategy": None,
+                "dominant_strategy_share": 0.0,
+                "avg_winrates_by_strategy": {},
+                "meta_health": self._assess_meta_health(archetypes)
+            }
 
         # Identify dominant strategy
         dominant_strategy = max(strategy_distribution.items(), key=lambda x: x[1])
@@ -342,6 +366,7 @@ class MetaIntelligenceService:
         avg_strategy_winrates = {
             strat: strategy_winrates[strat] / strategy_counts[strat]
             for strat in strategy_winrates
+            if strategy_counts[strat] > 0
         }
 
         return {
