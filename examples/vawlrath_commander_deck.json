@@ -1,0 +1,719 @@
+{
+  "name": "Vawlrath the Small'n - Commander",
+  "format": "Commander",
+  "description": "A competitive commander deck featuring Vawlrath the Small'n with focus on aggressive creature strategies and synergistic value engines.",
+  "mainboard": [
+    {
+      "name": "Vawlrath the Small'n",
+      "quantity": 1,
+      "card_type": "Legendary Creature",
+      "cmc": 3,
+      "colors": ["R", "G"],
+      "set": "CUSTOM",
+      "collector_number": "001",
+      "rarity": "Mythic Rare",
+      "abilities": "Haste, Trample. Whenever Vawlrath attacks, create a 1/1 red Goblin creature token."
+    },
+    {
+      "name": "Sol Ring",
+      "quantity": 1,
+      "card_type": "Artifact",
+      "cmc": 1,
+      "colors": ["C"],
+      "set": "CMR",
+      "collector_number": "472"
+    },
+    {
+      "name": "Lightning Greaves",
+      "quantity": 1,
+      "card_type": "Artifact - Equipment",
+      "cmc": 2,
+      "colors": ["C"],
+      "set": "2X2",
+      "collector_number": "297"
+    },
+    {
+      "name": "Rhythm of the Wild",
+      "quantity": 1,
+      "card_type": "Enchantment",
+      "cmc": 3,
+      "colors": ["R", "G"],
+      "set": "RNA",
+      "collector_number": "201"
+    },
+    {
+      "name": "Beast Whisperer",
+      "quantity": 1,
+      "card_type": "Creature - Elf Druid",
+      "cmc": 4,
+      "colors": ["G"],
+      "set": "GRN",
+      "collector_number": "123"
+    },
+    {
+      "name": "Xenagos, God of Revels",
+      "quantity": 1,
+      "card_type": "Legendary Enchantment Creature - God",
+      "cmc": 5,
+      "colors": ["R", "G"],
+      "set": "BNG",
+      "collector_number": "156"
+    },
+    {
+      "name": "Craterhoof Behemoth",
+      "quantity": 1,
+      "card_type": "Creature - Beast",
+      "cmc": 8,
+      "colors": ["G"],
+      "set": "JMP",
+      "collector_number": "385"
+    },
+    {
+      "name": "Heroic Intervention",
+      "quantity": 1,
+      "card_type": "Instant",
+      "cmc": 2,
+      "colors": ["G"],
+      "set": "M21",
+      "collector_number": "188"
+    },
+    {
+      "name": "Nature's Lore",
+      "quantity": 1,
+      "card_type": "Sorcery",
+      "cmc": 2,
+      "colors": ["G"],
+      "set": "GN3",
+      "collector_number": "6"
+    },
+    {
+      "name": "Cultivate",
+      "quantity": 1,
+      "card_type": "Sorcery",
+      "cmc": 3,
+      "colors": ["G"],
+      "set": "M21",
+      "collector_number": "177"
+    },
+    {
+      "name": "Kodama's Reach",
+      "quantity": 1,
+      "card_type": "Sorcery - Arcane",
+      "cmc": 3,
+      "colors": ["G"],
+      "set": "CHK",
+      "collector_number": "214"
+    },
+    {
+      "name": "Chaos Warp",
+      "quantity": 1,
+      "card_type": "Instant",
+      "cmc": 3,
+      "colors": ["R"],
+      "set": "C21",
+      "collector_number": "159"
+    },
+    {
+      "name": "Beastmaster Ascension",
+      "quantity": 1,
+      "card_type": "Enchantment",
+      "cmc": 3,
+      "colors": ["G"],
+      "set": "CMD",
+      "collector_number": "142"
+    },
+    {
+      "name": "Impact Tremors",
+      "quantity": 1,
+      "card_type": "Enchantment",
+      "cmc": 2,
+      "colors": ["R"],
+      "set": "DTK",
+      "collector_number": "140"
+    },
+    {
+      "name": "Purphoros, God of the Forge",
+      "quantity": 1,
+      "card_type": "Legendary Enchantment Creature - God",
+      "cmc": 4,
+      "colors": ["R"],
+      "set": "THS",
+      "collector_number": "135"
+    },
+    {
+      "name": "Goblin Bombardment",
+      "quantity": 1,
+      "card_type": "Enchantment",
+      "cmc": 2,
+      "colors": ["R"],
+      "set": "M12",
+      "collector_number": "142"
+    },
+    {
+      "name": "Shared Animosity",
+      "quantity": 1,
+      "card_type": "Enchantment",
+      "cmc": 3,
+      "colors": ["R"],
+      "set": "MOR",
+      "collector_number": "104"
+    },
+    {
+      "name": "Parallel Lives",
+      "quantity": 1,
+      "card_type": "Enchantment",
+      "cmc": 4,
+      "colors": ["G"],
+      "set": "ISD",
+      "collector_number": "199"
+    },
+    {
+      "name": "Doubling Season",
+      "quantity": 1,
+      "card_type": "Enchantment",
+      "cmc": 5,
+      "colors": ["G"],
+      "set": "2XM",
+      "collector_number": "164"
+    },
+    {
+      "name": "Chord of Calling",
+      "quantity": 1,
+      "card_type": "Instant",
+      "cmc": 3,
+      "colors": ["G"],
+      "set": "M15",
+      "collector_number": "172"
+    },
+    {
+      "name": "Goblin Instigator",
+      "quantity": 1,
+      "card_type": "Creature - Goblin Rogue",
+      "cmc": 2,
+      "colors": ["R"],
+      "set": "M19",
+      "collector_number": "142"
+    },
+    {
+      "name": "Krenko, Mob Boss",
+      "quantity": 1,
+      "card_type": "Legendary Creature - Goblin Warrior",
+      "cmc": 4,
+      "colors": ["R"],
+      "set": "M13",
+      "collector_number": "138"
+    },
+    {
+      "name": "Goblin Chieftain",
+      "quantity": 1,
+      "card_type": "Creature - Goblin",
+      "cmc": 3,
+      "colors": ["R"],
+      "set": "M12",
+      "collector_number": "136"
+    },
+    {
+      "name": "Legion Warboss",
+      "quantity": 1,
+      "card_type": "Creature - Goblin Soldier",
+      "cmc": 3,
+      "colors": ["R"],
+      "set": "GRN",
+      "collector_number": "109"
+    },
+    {
+      "name": "Goblin Rabblemaster",
+      "quantity": 1,
+      "card_type": "Creature - Goblin Warrior",
+      "cmc": 3,
+      "colors": ["R"],
+      "set": "M15",
+      "collector_number": "145"
+    },
+    {
+      "name": "Skirk Prospector",
+      "quantity": 1,
+      "card_type": "Creature - Goblin",
+      "cmc": 1,
+      "colors": ["R"],
+      "set": "DOM",
+      "collector_number": "144"
+    },
+    {
+      "name": "Mogg War Marshal",
+      "quantity": 1,
+      "card_type": "Creature - Goblin Warrior",
+      "cmc": 2,
+      "colors": ["R"],
+      "set": "EMA",
+      "collector_number": "139"
+    },
+    {
+      "name": "Dragon Fodder",
+      "quantity": 1,
+      "card_type": "Sorcery",
+      "cmc": 2,
+      "colors": ["R"],
+      "set": "M19",
+      "collector_number": "133"
+    },
+    {
+      "name": "Hordeling Outburst",
+      "quantity": 1,
+      "card_type": "Sorcery",
+      "cmc": 3,
+      "colors": ["R"],
+      "set": "KTK",
+      "collector_number": "111"
+    },
+    {
+      "name": "Young Pyromancer",
+      "quantity": 1,
+      "card_type": "Creature - Human Shaman",
+      "cmc": 2,
+      "colors": ["R"],
+      "set": "M14",
+      "collector_number": "163"
+    },
+    {
+      "name": "Siege-Gang Commander",
+      "quantity": 1,
+      "card_type": "Creature - Goblin",
+      "cmc": 5,
+      "colors": ["R"],
+      "set": "DOM",
+      "collector_number": "143"
+    },
+    {
+      "name": "Hellraiser Goblin",
+      "quantity": 1,
+      "card_type": "Creature - Goblin Berserker",
+      "cmc": 3,
+      "colors": ["R"],
+      "set": "GTC",
+      "collector_number": "95"
+    },
+    {
+      "name": "Goblin Trashmaster",
+      "quantity": 1,
+      "card_type": "Creature - Goblin Warrior",
+      "cmc": 4,
+      "colors": ["R"],
+      "set": "M19",
+      "collector_number": "144"
+    },
+    {
+      "name": "Urabrask the Hidden",
+      "quantity": 1,
+      "card_type": "Legendary Creature - Phyrexian Praetor",
+      "cmc": 5,
+      "colors": ["R"],
+      "set": "NPH",
+      "collector_number": "98"
+    },
+    {
+      "name": "Zealous Conscripts",
+      "quantity": 1,
+      "card_type": "Creature - Human Warrior",
+      "cmc": 5,
+      "colors": ["R"],
+      "set": "AVR",
+      "collector_number": "166"
+    },
+    {
+      "name": "Avenger of Zendikar",
+      "quantity": 1,
+      "card_type": "Creature - Elemental",
+      "cmc": 7,
+      "colors": ["G"],
+      "set": "C18",
+      "collector_number": "129"
+    },
+    {
+      "name": "Tendershoot Dryad",
+      "quantity": 1,
+      "card_type": "Creature - Dryad",
+      "cmc": 5,
+      "colors": ["G"],
+      "set": "RIX",
+      "collector_number": "147"
+    },
+    {
+      "name": "Scute Swarm",
+      "quantity": 1,
+      "card_type": "Creature - Insect",
+      "cmc": 3,
+      "colors": ["G"],
+      "set": "ZNR",
+      "collector_number": "203"
+    },
+    {
+      "name": "Dragonlair Spider",
+      "quantity": 1,
+      "card_type": "Creature - Spider",
+      "cmc": 6,
+      "colors": ["R", "G"],
+      "set": "C18",
+      "collector_number": "163"
+    },
+    {
+      "name": "Hornet Queen",
+      "quantity": 1,
+      "card_type": "Creature - Insect",
+      "cmc": 7,
+      "colors": ["G"],
+      "set": "M15",
+      "collector_number": "178"
+    },
+    {
+      "name": "Ohran Frostfang",
+      "quantity": 1,
+      "card_type": "Snow Creature - Snake",
+      "cmc": 4,
+      "colors": ["G"],
+      "set": "C19",
+      "collector_number": "33"
+    },
+    {
+      "name": "Rampaging Baloths",
+      "quantity": 1,
+      "card_type": "Creature - Beast",
+      "cmc": 6,
+      "colors": ["G"],
+      "set": "ZEN",
+      "collector_number": "178"
+    },
+    {
+      "name": "Sakura-Tribe Elder",
+      "quantity": 1,
+      "card_type": "Creature - Snake Shaman",
+      "cmc": 2,
+      "colors": ["G"],
+      "set": "C16",
+      "collector_number": "164"
+    },
+    {
+      "name": "Wood Elves",
+      "quantity": 1,
+      "card_type": "Creature - Elf Scout",
+      "cmc": 3,
+      "colors": ["G"],
+      "set": "DDG",
+      "collector_number": "55"
+    },
+    {
+      "name": "Farhaven Elf",
+      "quantity": 1,
+      "card_type": "Creature - Elf Druid",
+      "cmc": 3,
+      "colors": ["G"],
+      "set": "C19",
+      "collector_number": "161"
+    },
+    {
+      "name": "Skyshroud Claim",
+      "quantity": 1,
+      "card_type": "Sorcery",
+      "cmc": 4,
+      "colors": ["G"],
+      "set": "NEM",
+      "collector_number": "117"
+    },
+    {
+      "name": "Rampant Growth",
+      "quantity": 1,
+      "card_type": "Sorcery",
+      "cmc": 2,
+      "colors": ["G"],
+      "set": "M12",
+      "collector_number": "190"
+    },
+    {
+      "name": "Three Visits",
+      "quantity": 1,
+      "card_type": "Sorcery",
+      "cmc": 2,
+      "colors": ["G"],
+      "set": "CMR",
+      "collector_number": "261"
+    },
+    {
+      "name": "Return of the Wildspeaker",
+      "quantity": 1,
+      "card_type": "Instant",
+      "cmc": 5,
+      "colors": ["G"],
+      "set": "ELD",
+      "collector_number": "172"
+    },
+    {
+      "name": "Shamanic Revelation",
+      "quantity": 1,
+      "card_type": "Sorcery",
+      "cmc": 5,
+      "colors": ["G"],
+      "set": "C16",
+      "collector_number": "167"
+    },
+    {
+      "name": "Greater Good",
+      "quantity": 1,
+      "card_type": "Enchantment",
+      "cmc": 4,
+      "colors": ["G"],
+      "set": "BBD",
+      "collector_number": "201"
+    },
+    {
+      "name": "Guardian Project",
+      "quantity": 1,
+      "card_type": "Enchantment",
+      "cmc": 4,
+      "colors": ["G"],
+      "set": "RNA",
+      "collector_number": "130"
+    },
+    {
+      "name": "Blasphemous Act",
+      "quantity": 1,
+      "card_type": "Sorcery",
+      "cmc": 9,
+      "colors": ["R"],
+      "set": "C21",
+      "collector_number": "159"
+    },
+    {
+      "name": "Beast Within",
+      "quantity": 1,
+      "card_type": "Instant",
+      "cmc": 3,
+      "colors": ["G"],
+      "set": "NPH",
+      "collector_number": "103"
+    },
+    {
+      "name": "Hull Breach",
+      "quantity": 1,
+      "card_type": "Sorcery",
+      "cmc": 2,
+      "colors": ["R", "G"],
+      "set": "C13",
+      "collector_number": "168"
+    },
+    {
+      "name": "Artifact Mutation",
+      "quantity": 1,
+      "card_type": "Instant",
+      "cmc": 2,
+      "colors": ["R", "G"],
+      "set": "C14",
+      "collector_number": "37"
+    },
+    {
+      "name": "Krosan Grip",
+      "quantity": 1,
+      "card_type": "Instant",
+      "cmc": 3,
+      "colors": ["G"],
+      "set": "TSP",
+      "collector_number": "207"
+    },
+    {
+      "name": "Vandalblast",
+      "quantity": 1,
+      "card_type": "Sorcery",
+      "cmc": 1,
+      "colors": ["R"],
+      "set": "RTR",
+      "collector_number": "110"
+    },
+    {
+      "name": "Firecat Blitz",
+      "quantity": 1,
+      "card_type": "Sorcery",
+      "cmc": 3,
+      "colors": ["R"],
+      "set": "ONS",
+      "collector_number": "196"
+    },
+    {
+      "name": "Swiftfoot Boots",
+      "quantity": 1,
+      "card_type": "Artifact - Equipment",
+      "cmc": 2,
+      "colors": ["C"],
+      "set": "C21",
+      "collector_number": "263"
+    },
+    {
+      "name": "Gruul Signet",
+      "quantity": 1,
+      "card_type": "Artifact",
+      "cmc": 2,
+      "colors": ["C"],
+      "set": "GK2",
+      "collector_number": "14"
+    },
+    {
+      "name": "Talisman of Impulse",
+      "quantity": 1,
+      "card_type": "Artifact",
+      "cmc": 2,
+      "colors": ["C"],
+      "set": "MH1",
+      "collector_number": "233"
+    },
+    {
+      "name": "Arcane Signet",
+      "quantity": 1,
+      "card_type": "Artifact",
+      "cmc": 2,
+      "colors": ["C"],
+      "set": "ELD",
+      "collector_number": "331"
+    },
+    {
+      "name": "Kessig Wolf Run",
+      "quantity": 1,
+      "card_type": "Land",
+      "cmc": 0,
+      "colors": [],
+      "set": "ISD",
+      "collector_number": "243"
+    },
+    {
+      "name": "Rootbound Crag",
+      "quantity": 1,
+      "card_type": "Land",
+      "cmc": 0,
+      "colors": [],
+      "set": "XLN",
+      "collector_number": "256"
+    },
+    {
+      "name": "Game Trail",
+      "quantity": 1,
+      "card_type": "Land",
+      "cmc": 0,
+      "colors": [],
+      "set": "SOI",
+      "collector_number": "276"
+    },
+    {
+      "name": "Temple of Abandon",
+      "quantity": 1,
+      "card_type": "Land",
+      "cmc": 0,
+      "colors": [],
+      "set": "THB",
+      "collector_number": "244"
+    },
+    {
+      "name": "Stomping Ground",
+      "quantity": 1,
+      "card_type": "Land - Mountain Forest",
+      "cmc": 0,
+      "colors": [],
+      "set": "RNA",
+      "collector_number": "259"
+    },
+    {
+      "name": "Cragcrown Pathway",
+      "quantity": 1,
+      "card_type": "Land",
+      "cmc": 0,
+      "colors": [],
+      "set": "ZNR",
+      "collector_number": "261"
+    },
+    {
+      "name": "Command Tower",
+      "quantity": 1,
+      "card_type": "Land",
+      "cmc": 0,
+      "colors": [],
+      "set": "CMR",
+      "collector_number": "350"
+    },
+    {
+      "name": "Mountain",
+      "quantity": 15,
+      "card_type": "Basic Land - Mountain",
+      "cmc": 0,
+      "colors": [],
+      "set": "ZNR",
+      "collector_number": "380"
+    },
+    {
+      "name": "Forest",
+      "quantity": 15,
+      "card_type": "Basic Land - Forest",
+      "cmc": 0,
+      "colors": [],
+      "set": "ZNR",
+      "collector_number": "384"
+    }
+  ],
+  "sideboard": [],
+  "meta_analysis": {
+    "strategy": "Aggressive token generation with go-wide strategies",
+    "power_level": 7.5,
+    "budget_tier": "mid-range",
+    "key_synergies": [
+      "Vawlrath's token generation triggers Impact Tremors and Purphoros",
+      "Doubling Season and Parallel Lives double token output",
+      "Beastmaster Ascension provides lethal damage with wide board",
+      "Xenagos gives massive power boost to Vawlrath",
+      "Craterhoof Behemoth as primary finisher"
+    ],
+    "strengths": [
+      "Explosive token generation",
+      "Multiple win conditions (combat damage, burn, overrun)",
+      "Resilient to single-target removal",
+      "Fast mana ramp in green"
+    ],
+    "weaknesses": [
+      "Vulnerable to board wipes",
+      "Relies heavily on commander being active",
+      "Limited interaction with combo decks",
+      "Weak to pillow fort strategies"
+    ],
+    "favorable_matchups": [
+      "Midrange creature decks",
+      "Voltron strategies",
+      "Life gain decks"
+    ],
+    "unfavorable_matchups": [
+      "Control with board wipes",
+      "Stax strategies",
+      "Fast combo (Storm, Lab Man)"
+    ]
+  },
+  "budget_alternatives": {
+    "high_to_low": [
+      {"expensive": "Doubling Season", "budget": "Primal Vigor", "savings": "$40"},
+      {"expensive": "Craterhoof Behemoth", "budget": "End-Raze Forerunners", "savings": "$25"},
+      {"expensive": "Parallel Lives", "budget": "Anointed Procession", "savings": "$15"}
+    ]
+  },
+  "upgrade_path": [
+    {
+      "priority": 1,
+      "card": "Gaea's Cradle",
+      "reason": "Explosive mana generation with token strategy",
+      "cost_estimate": "$1000+"
+    },
+    {
+      "priority": 2,
+      "card": "Concordant Crossroads",
+      "reason": "Gives all tokens haste for immediate impact",
+      "cost_estimate": "$25"
+    },
+    {
+      "priority": 3,
+      "card": "Dockside Extortionist",
+      "reason": "Generates mana and synergizes with token doublers",
+      "cost_estimate": "$60"
+    }
+  ]
+}
