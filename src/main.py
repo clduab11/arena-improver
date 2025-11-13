@@ -9,6 +9,7 @@ import uvicorn
 import psutil
 import os
 import logging
+from sqlalchemy.exc import SQLAlchemyError
 
 from .api.routes import router, sql_service
 from .utils.cache import get_meta_cache, get_deck_cache
@@ -89,9 +90,20 @@ async def readiness_check():
                 "database": "connected"
             }
         }
-    except Exception as e:
+    except SQLAlchemyError as e:
         # Log the actual error for debugging
-        logger.error(f"Readiness check failed: {e}", exc_info=True)
+        logger.error(f"Database initialization failed: {e}", exc_info=True)
+        
+        return JSONResponse(
+            content={
+                "status": "not_ready",
+                "error": "Database initialization failed"
+            },
+            status_code=503
+        )
+    except Exception as e:
+        # Log unexpected errors for debugging
+        logger.error(f"Unexpected readiness check failure: {e}", exc_info=True)
         
         return JSONResponse(
             content={

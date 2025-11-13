@@ -183,13 +183,18 @@ class PersistentCache:
         """Get value from persistent cache."""
         cache_path = self._get_cache_path(key)
 
-        def _read_and_check():
+        def _read_and_check() -> Optional[Any]:
             """Blocking I/O operation to read and check cache file."""
             if not cache_path.exists():
                 return None
 
-            with open(cache_path, 'r') as f:
-                data = json.load(f)
+            try:
+                with open(cache_path, 'r') as f:
+                    data = json.load(f)
+            except json.JSONDecodeError as e:
+                # Handle partially written or corrupted files
+                logger.warning(f"Corrupted cache file {key}: {e}")
+                return None
 
             # Check expiration
             timestamp = data.get('timestamp', 0)
@@ -204,9 +209,9 @@ class PersistentCache:
             return data.get('value')
 
         try:
-            # No need to check existence under lock; _read_and_check handles it
-            # Perform blocking I/O in thread pool
-            return await asyncio.to_thread(_read_and_check)
+            # Read under lock to prevent seeing partially written files
+            async with self._lock:
+                return await asyncio.to_thread(_read_and_check)
 
         except Exception as e:
             logger.warning(f"Error reading persistent cache {key}: {e}")
@@ -219,8 +224,8 @@ class PersistentCache:
 
         cache_path = self._get_cache_path(key)
 
-        def _write_file():
-            """Blocking I/O operation to write cache file."""
+        def _write_file() -> None:
+            """Blocking I/O operation to write cache file atomically."""
             data = {
                 'key': key,
                 'value': value,
@@ -228,18 +233,20 @@ class PersistentCache:
                 'ttl': ttl
             }
 
-            with open(cache_path, 'w') as f:
+            # Write to temp file first, then atomic rename to prevent partial reads
+            temp_path = cache_path.with_suffix('.tmp')
+            with open(temp_path, 'w') as f:
                 json.dump(data, f, indent=2)
+            temp_path.replace(cache_path)  # Atomic on POSIX systems
 
             logger.debug(f"Persistent cache set: {key}")
 
         try:
-            # Use lock only to ensure directory exists
             async with self._lock:
+                # Ensure directory exists while holding lock
                 self.cache_dir.mkdir(parents=True, exist_ok=True)
-            
-            # Perform blocking I/O in thread pool
-            await asyncio.to_thread(_write_file)
+                # Perform I/O while holding lock to prevent race conditions
+                await asyncio.to_thread(_write_file)
 
         except Exception as e:
             logger.warning(f"Error writing persistent cache {key}: {e}")
@@ -317,20 +324,30 @@ class PersistentCache:
 def cache_key(*args, **kwargs) -> str:
     """Generate cache key from function arguments."""
     
-    
     # Convert args and kwargs to a stable string representation
     key_parts = []
 
     def serialize_value(value):
         """Serialize a value to a stable string representation."""
         if isinstance(value, (str, int, float, bool, type(None))):
-            return str(value)
-        try:
-            # Try to serialize as JSON with sorted keys for stability
-            return json.dumps(value, default=repr, sort_keys=True)
-        except (TypeError, ValueError):
-            # Fall back to repr if JSON serialization fails
-            return repr(value)
+            # For primitives, use simple string representation
+            # Use json.dumps for strings to handle escaping, but remove quotes
+            if isinstance(value, str):
+                # Use JSON serialization for proper escaping, then strip quotes
+                json_str = json.dumps(value, sort_keys=True)
+                return json_str[1:-1] if json_str.startswith('"') else json_str
+            else:
+                return str(value)
+        elif isinstance(value, (list, tuple)):
+            # Recursively serialize sequences - JSON serialize entire structure
+            return json.dumps(value, default=str, sort_keys=True)
+        elif isinstance(value, dict):
+            # Recursively serialize dicts with sorted keys
+            return json.dumps(value, default=str, sort_keys=True)
+        else:
+            # Use a stable hash for non-serializable types
+            # Avoid repr() as it can include memory addresses
+            return f"{type(value).__module__}.{type(value).__qualname__}:{hash(str(value))}"
 
     for arg in args:
         key_parts.append(serialize_value(arg))
