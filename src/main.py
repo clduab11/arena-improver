@@ -8,10 +8,13 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import psutil
 import os
+import logging
 
 from .api.routes import router, sql_service
 from .utils.cache import get_meta_cache, get_deck_cache
 from . import __version__
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -87,10 +90,13 @@ async def readiness_check():
             }
         }
     except Exception as e:
+        # Log the actual error for debugging
+        logger.error(f"Readiness check failed: {e}", exc_info=True)
+        
         return JSONResponse(
             content={
                 "status": "not_ready",
-                "error": str(e)
+                "error": "Service initialization failed"
             },
             status_code=503
         )
