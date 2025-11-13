@@ -22,7 +22,11 @@ async def test_root_endpoint():
 
 @pytest.mark.asyncio
 async def test_health_check_endpoint():
-    """Test basic health check endpoint."""
+    """
+    Verify the /health endpoint reports the service as healthy and includes timestamp and version.
+    
+    Asserts that the response status code is 200, the JSON `status` field equals "healthy", and the payload contains `timestamp` and `version`.
+    """
     async with AsyncClient(app=app, base_url="http://test") as client:
         response = await client.get("/health")
 
@@ -68,7 +72,11 @@ async def test_readiness_probe():
 
 @pytest.mark.asyncio
 async def test_metrics_endpoint():
-    """Test metrics endpoint returns monitoring data."""
+    """
+    Verify the /metrics endpoint exposes expected monitoring and cache statistics.
+    
+    Asserts the endpoint responds with HTTP 200 and that the JSON payload contains top-level keys `timestamp`, `version`, `system`, and `cache`. Confirms `system` includes `cpu_percent`, `memory_mb`, `memory_percent`, `num_threads`, and `open_files`. Confirms `cache` includes `meta` and `deck`; `meta` must include `size`, `max_size`, `hit_rate`, `hits`, `misses`, and `utilization`; `deck` must include `size` and `max_size`.
+    """
     async with AsyncClient(app=app, base_url="http://test") as client:
         response = await client.get("/metrics")
 
@@ -193,7 +201,11 @@ async def test_metrics_cache_values():
 
 @pytest.mark.asyncio
 async def test_health_endpoints_response_time():
-    """Test that health endpoints respond quickly."""
+    """
+    Verify the /health endpoint responds within 100 milliseconds.
+    
+    Asserts that a GET request to /health returns HTTP 200 and that the measured elapsed time is less than 0.1 seconds.
+    """
     import time
 
     async with AsyncClient(app=app, base_url="http://test") as client:
@@ -224,7 +236,13 @@ async def test_multiple_health_checks():
 
 @pytest.mark.asyncio
 async def test_status_features_reflect_environment():
-    """Test that feature flags reflect actual environment."""
+    """
+    Verify the status endpoint's reported feature flags mirror the presence of relevant environment variables.
+    
+    Checks that:
+    - The `ai_optimization` flag equals whether `OPENAI_API_KEY` is set in the environment.
+    - The `meta_intelligence` flag equals whether `TAVILY_API_KEY` is set in the environment.
+    """
     import os
 
     async with AsyncClient(app=app, base_url="http://test") as client:

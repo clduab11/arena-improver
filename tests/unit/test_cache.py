@@ -316,6 +316,15 @@ class TestCachedDecorator:
 
         @cached(cache)
         async def expensive_func(param):
+            """
+            Produce a result string derived from the input parameter and increment an external call counter.
+            
+            Parameters:
+                param: Value used to build the result string; its string representation is inserted into the result.
+            
+            Returns:
+                A string in the form `result_<param>` where `<param>` is the input's string representation.
+            """
             nonlocal call_count
             call_count += 1
             return f"result_{param}"
@@ -338,6 +347,12 @@ class TestCachedDecorator:
 
         @cached(cache)
         async def func(param):
+            """
+            Constructs a formatted result string from param and increments the enclosing call counter.
+            
+            Returns:
+                str: The result string in the form "result_<param>".
+            """
             nonlocal call_count
             call_count += 1
             return f"result_{param}"
@@ -363,6 +378,14 @@ class TestCachedDecorator:
 
         @cached(cache, ttl=0.01)
         async def func():
+            """
+            Asynchronous helper that increments a shared call counter and returns a fixed result.
+            
+            Increments the nonlocal `call_count` by one each time it is invoked.
+            
+            Returns:
+                "result" (str): The fixed result string.
+            """
             nonlocal call_count
             call_count += 1
             return "result"

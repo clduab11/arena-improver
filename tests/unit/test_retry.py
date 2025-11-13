@@ -70,6 +70,12 @@ class TestWithRetry:
 
         @with_retry()
         async def successful_func():
+            """
+            Simulate an always-successful asynchronous callable used in tests.
+            
+            Returns:
+                str: The literal string "success".
+            """
             nonlocal call_count
             call_count += 1
             return "success"
@@ -86,6 +92,15 @@ class TestWithRetry:
 
         @with_retry(config=RetryConfig(max_attempts=3, base_delay=0.01))
         async def failing_func():
+            """
+            Simulates a function that raises NetworkError on the first two invocations and returns a success marker thereafter.
+            
+            Raises:
+                NetworkError: on the first two calls.
+            
+            Returns:
+                str: "success" on the third and subsequent calls.
+            """
             nonlocal call_count
             call_count += 1
             if call_count < 3:
@@ -104,6 +119,15 @@ class TestWithRetry:
 
         @with_retry(config=RetryConfig(max_attempts=3, base_delay=0.01))
         async def always_failing_func():
+            """
+            Always increments the enclosing `call_count` and then raises a NetworkError.
+            
+            This coroutine is used in tests to simulate a persistent network failure: each invocation
+            increments the nonlocal `call_count` and immediately raises a `NetworkError`.
+            
+            Raises:
+                NetworkError: Always raised when the coroutine is called.
+            """
             nonlocal call_count
             call_count += 1
             raise NetworkError("Network error")
@@ -150,6 +174,14 @@ class TestCircuitBreaker:
         )
 
         async def failing_func():
+            """
+            Always raises a NetworkError to simulate a network failure.
+            
+            Intended for tests that require an operation that fails with a network-related retryable error.
+            
+            Raises:
+                NetworkError: Always raised with the message "Network error".
+            """
             raise NetworkError("Network error")
 
         # Trigger failures
@@ -170,6 +202,15 @@ class TestCircuitBreaker:
 
         async def failing_then_succeeding():
             # Will fail until circuit recovers
+            """
+            Simulate an operation that fails while a circuit breaker is closed and succeeds once the breaker allows calls.
+            
+            Returns:
+                str: The string "success" when the circuit breaker is not in the "CLOSED" state.
+            
+            Raises:
+                NetworkError: If the circuit breaker's state is "CLOSED", indicating a transient network failure.
+            """
             if breaker.state == "CLOSED":
                 raise NetworkError("Network error")
             return "success"
@@ -187,6 +228,12 @@ class TestCircuitBreaker:
         # Next call should enter HALF_OPEN state
         # We'll modify the function to succeed now
         async def succeeding_func():
+            """
+            Return a constant success value.
+            
+            Returns:
+                str: The string "success".
+            """
             return "success"
 
         result = await breaker.call(succeeding_func)
@@ -238,6 +285,12 @@ class TestRateLimiter:
 
         @with_rate_limit(limiter)
         async def rate_limited_func():
+            """
+            Record the current event loop time and indicate successful completion.
+            
+            Returns:
+                str: The literal string "success" indicating the function completed.
+            """
             call_times.append(asyncio.get_event_loop().time())
             return "success"
 

@@ -29,7 +29,20 @@ logger = logging.getLogger(__name__)
 
 
 def load_deck_from_json(json_path: str) -> Deck:
-    """Load a deck from JSON file."""
+    """
+    Load a deck definition from a JSON file and convert it into a Deck model.
+    
+    Expects the JSON to contain at least the top-level keys: `name`, `format`, and `mainboard`.
+    Each entry in `mainboard` must include `name`, `quantity`, `card_type`, `cmc`, and `colors`.
+    Optionally, the JSON may include a `sideboard` list with the same card entry fields.
+    Card entries may provide `set` and `collector_number`; when absent those default to `"UNK"` and `"000"` respectively.
+    
+    Parameters:
+        json_path (str): Filesystem path to the deck JSON file.
+    
+    Returns:
+        Deck: A Deck instance populated with Card objects for the mainboard and optional sideboard.
+    """
     with open(json_path, 'r') as f:
         data = json.load(f)
 
@@ -70,7 +83,19 @@ def load_deck_from_json(json_path: str) -> Deck:
 
 
 def print_deck_summary(deck: Deck, meta_data: Dict[str, Any]):
-    """Print a formatted deck summary."""
+    """
+    Prints a human-readable summary of the given deck and its optional meta-analysis.
+    
+    Parameters:
+        deck (Deck): Deck model containing name, format, mainboard, and sideboard used to compute totals and unique card count.
+        meta_data (Dict[str, Any]): Optional metadata to display. Recognized keys include:
+            - strategy (str): High-level archetype or play pattern.
+            - power_level (int|str): Relative power rating (displayed as "/10" when present).
+            - budget_tier (str): Cost classification.
+            - strengths (List[str]): List of deck strengths.
+            - weaknesses (List[str]): List of deck weaknesses.
+            - key_synergies (List[str]): Important card or interaction synergies.
+    """
     print("\n" + "="*70)
     print(f"  {deck.name}")
     print("="*70)
@@ -104,7 +129,11 @@ def print_deck_summary(deck: Deck, meta_data: Dict[str, Any]):
 
 
 async def analyze_vawlrath_deck():
-    """Complete analysis workflow for Vawlrath deck."""
+    """
+    Run the end-to-end analysis and reporting workflow for the Vawlrath commander deck.
+    
+    Loads the deck JSON bundled with this module, prints a formatted deck summary, stores the deck in the configured SQL database, runs a comprehensive composition analysis, and (when available) requests AI-powered optimization suggestions and a win-rate prediction. Also prints meta matchup information, budget alternatives, and an upgrade path if present in the deck data, then prints a final summary and closes the database connection. The function reports progress and results to stdout.
+    """
 
     # 1. Load the deck
     print("📂 Loading Vawlrath the Small'n Commander deck...")
@@ -228,7 +257,14 @@ async def analyze_vawlrath_deck():
 
 
 async def track_performance_example(deck_id: int):
-    """Example of tracking deck performance over time."""
+    """
+    Record example performance entries for the given deck using SmartSQLService and print progress messages.
+    
+    Initializes the SQL service, inserts a small set of illustrative match records associated with deck_id, prints a summary line for each recorded match, and closes the service. Intended as a runnable example demonstrating how to record and inspect deck performance statistics.
+    
+    Parameters:
+        deck_id (int): Identifier of the deck to associate performance entries with.
+    """
     print("\n" + "="*70)
     print("  Performance Tracking Example")
     print("="*70)
@@ -284,7 +320,11 @@ async def track_performance_example(deck_id: int):
 
 
 def main():
-    """Main entry point."""
+    """
+    Run the example analysis workflow for the Vawlrath deck and print usage and tracking guidance.
+    
+    Executes the end-to-end demonstration: displays a decorative header, runs the Vawlrath deck analysis routine, and prints short instructions for tracking deck performance along with references to the documentation and repository.
+    """
     print("\n" + "🎮"*35)
     print("  Arena Improver - Vawlrath the Small'n Analysis")
     print("  MCP-1st-Birthday Hackathon Demonstration")

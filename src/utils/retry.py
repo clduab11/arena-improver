@@ -27,14 +27,15 @@ class RetryConfig:
         exponential_base: float = 2.0,
         jitter: bool = True
     ):
-        """Initialize retry configuration.
-
-        Args:
-            max_attempts: Maximum number of retry attempts
-            base_delay: Initial delay between retries (seconds)
-            max_delay: Maximum delay between retries (seconds)
-            exponential_base: Base for exponential backoff
-            jitter: Whether to add random jitter to delays
+        """
+        Configure retry behavior for operations.
+        
+        Parameters:
+            max_attempts (int): Maximum number of attempts before giving up.
+            base_delay (float): Initial backoff delay in seconds.
+            max_delay (float): Upper bound for computed delay in seconds.
+            exponential_base (float): Multiplier base used for exponential backoff per attempt.
+            jitter (bool): If True, applies random jitter (between 0.5x and 1.0x) to the computed delay.
         """
         self.max_attempts = max_attempts
         self.base_delay = base_delay
@@ -43,7 +44,15 @@ class RetryConfig:
         self.jitter = jitter
 
     def calculate_delay(self, attempt: int) -> float:
-        """Calculate delay for given attempt number."""
+        """
+        Compute the retry delay for a given attempt using exponential backoff with optional jitter.
+        
+        Parameters:
+            attempt (int): Retry attempt index (0 for the first attempt).
+        
+        Returns:
+            float: Delay in seconds to wait before the next retry.
+        """
         import random
 
         # Exponential backoff
@@ -83,17 +92,17 @@ def with_retry(
     config: Optional[RetryConfig] = None,
     retryable_exceptions: Optional[Tuple[Type[Exception], ...]] = None
 ):
-    """Decorator to add retry logic to async functions.
-
-    Args:
-        config: Retry configuration (uses defaults if None)
-        retryable_exceptions: Tuple of exception types that should trigger retry
-
-    Usage:
-        @with_retry(config=RetryConfig(max_attempts=5))
-        async def fetch_data():
-            # Your code here
-            pass
+    """
+    Decorator that retries an async function on configured transient errors using exponential backoff and optional jitter.
+    
+    Wraps an async callable to attempt execution up to config.max_attempts times. When an exception instance matches one of retryable_exceptions, the wrapper waits a delay computed by config.calculate_delay(attempt) and retries until attempts are exhausted; on the final failed attempt the exception is re-raised. Any exception not in retryable_exceptions is re-raised immediately.
+    
+    Parameters:
+        config (RetryConfig | None): RetryConfig instance controlling max attempts, base/max delays, backoff base, and jitter. If None, a default RetryConfig is used.
+        retryable_exceptions (tuple[type[Exception], ...] | None): Tuple of exception types that should trigger a retry. If None, a default set of transient/retryable exceptions is used.
+    
+    Returns:
+        Callable: A decorator that, when applied to an async function, returns a wrapped async function implementing the described retry behavior.
     """
     if config is None:
         config = RetryConfig()
@@ -109,6 +118,17 @@ def with_retry(
         )
 
     def decorator(func: Callable) -> Callable:
+        """
+        Wrap an asynchronous callable with retry behavior using the enclosing `config` and `retryable_exceptions`.
+        
+        Wraps `func` so that it is invoked up to `config.max_attempts` times when a `retryable_exceptions` type is raised, waiting the delay returned by `config.calculate_delay(attempt)` between retries. A non-retryable exception is re-raised immediately. If all attempts are exhausted, the last retryable exception is re-raised.
+        
+        Parameters:
+            func (Callable): The asynchronous callable to wrap.
+        
+        Returns:
+            Callable: An async wrapper that applies the configured retry policy to `func`.
+        """
         @wraps(func)
         async def wrapper(*args, **kwargs) -> Any:
             last_exception = None
@@ -167,12 +187,13 @@ class CircuitBreaker:
         recovery_timeout: float = 60.0,
         expected_exception: Type[Exception] = Exception
     ):
-        """Initialize circuit breaker.
-
-        Args:
-            failure_threshold: Number of failures before opening circuit
-            recovery_timeout: Seconds to wait before attempting recovery
-            expected_exception: Exception type that triggers circuit breaker
+        """
+        Create a CircuitBreaker configured with failure and recovery parameters.
+        
+        Parameters:
+            failure_threshold (int): Number of consecutive failures required to open the circuit.
+            recovery_timeout (float): Seconds to wait after opening before allowing a reset attempt.
+            expected_exception (Type[Exception]): Exception type that is counted as a failure toward the threshold.
         """
         self.failure_threshold = failure_threshold
         self.recovery_timeout = recovery_timeout
@@ -184,18 +205,46 @@ class CircuitBreaker:
 
     @property
     def state(self) -> str:
-        """Get current circuit breaker state."""
+        """
+        Return the current state of the circuit breaker.
+        
+        Returns:
+            state (str): One of "CLOSED", "OPEN", or "HALF_OPEN" representing the circuit breaker's current state.
+        """
         return self._state
 
     def _should_attempt_reset(self) -> bool:
-        """Check if enough time has passed to attempt reset."""
+        """
+        Determine whether the circuit breaker may attempt a recovery reset based on elapsed time.
+        
+        Returns:
+            bool: `True` if `recovery_timeout` seconds have elapsed since the last recorded failure, `False` otherwise.
+        """
         if self._last_failure_time is None:
             return False
 
         return (time.time() - self._last_failure_time) >= self.recovery_timeout
 
     async def call(self, func: Callable, *args, **kwargs) -> Any:
-        """Execute function with circuit breaker protection."""
+        """
+        Execute the given async callable under circuit breaker protection.
+        
+        When the circuit is OPEN and the recovery timeout has not elapsed, raises ServiceUnavailableError.
+        If the circuit is OPEN and the recovery timeout has elapsed, transitions to HALF_OPEN and attempts the call.
+        On a successful call while HALF_OPEN, transitions the circuit to CLOSED and resets the failure count.
+        
+        Parameters:
+            func (Callable): The asynchronous callable to execute.
+            *args: Positional arguments forwarded to `func`.
+            **kwargs: Keyword arguments forwarded to `func`.
+        
+        Returns:
+            Any: The result returned by `func`.
+        
+        Raises:
+            ServiceUnavailableError: If the circuit is OPEN and recovery timeout has not elapsed.
+            Exception: Re-raises exceptions of the configured `expected_exception` type after recording the failure.
+        """
 
         # Check if circuit is open
         if self._state == "OPEN":
@@ -240,21 +289,28 @@ class CircuitBreaker:
 
 
 def with_circuit_breaker(circuit_breaker: CircuitBreaker):
-    """Decorator to add circuit breaker protection to async functions.
-
-    Args:
-        circuit_breaker: CircuitBreaker instance to use
-
-    Usage:
-        breaker = CircuitBreaker(failure_threshold=5)
-
-        @with_circuit_breaker(breaker)
-        async def fetch_data():
-            # Your code here
-            pass
+    """
+    Wrap an async function so its invocations are governed by the provided circuit breaker.
+    
+    Parameters:
+        circuit_breaker (CircuitBreaker): CircuitBreaker instance that will govern call execution and transition circuit states.
+    
+    Returns:
+        Callable: A decorator that, when applied to an async function, returns a wrapper which executes that function under the circuit breaker's protection.
     """
 
     def decorator(func: Callable) -> Callable:
+        """
+        Wraps an async callable so its invocations are executed through the configured CircuitBreaker.
+        
+        The returned wrapper delegates each call to circuit_breaker.call, preserving positional and keyword arguments and returning the underlying result or re-raising exceptions from the circuit breaker.
+        
+        Parameters:
+            func (Callable): The async function to wrap.
+        
+        Returns:
+            Callable: An async wrapper function that forwards calls to the circuit breaker.
+        """
         @wraps(func)
         async def wrapper(*args, **kwargs) -> Any:
             return await circuit_breaker.call(func, *args, **kwargs)
@@ -272,11 +328,12 @@ class RateLimiter:
         rate: float,  # requests per second
         burst: int = 1  # max burst size
     ):
-        """Initialize rate limiter.
-
-        Args:
-            rate: Maximum requests per second
-            burst: Maximum burst size (tokens in bucket)
+        """
+        Create a token-bucket rate limiter configured with a refill rate and burst capacity.
+        
+        Parameters:
+        	rate (float): Token refill rate in tokens per second.
+        	burst (int): Maximum and initial token bucket capacity (maximum burst size).
         """
         self.rate = rate
         self.burst = burst
@@ -285,7 +342,14 @@ class RateLimiter:
         self._lock = asyncio.Lock()
 
     async def acquire(self, tokens: int = 1):
-        """Acquire tokens from the bucket, waiting if necessary."""
+        """
+        Waits until the requested number of tokens are available and consumes them from the token bucket.
+        
+        Replenishes tokens based on elapsed time (at the configured rate, capped by the burst capacity) and sleeps as necessary until the requested tokens can be taken.
+        
+        Parameters:
+            tokens (int): Number of tokens to acquire from the bucket. Defaults to 1.
+        """
         async with self._lock:
             while True:
                 now = time.time()
@@ -312,22 +376,26 @@ class RateLimiter:
 
 
 def with_rate_limit(limiter: RateLimiter, tokens: int = 1):
-    """Decorator to add rate limiting to async functions.
-
-    Args:
-        limiter: RateLimiter instance to use
-        tokens: Number of tokens to consume per call
-
-    Usage:
-        limiter = RateLimiter(rate=2.0, burst=5)  # 2 req/s, burst of 5
-
-        @with_rate_limit(limiter)
-        async def api_call():
-            # Your code here
-            pass
+    """
+    Apply a token-bucket rate limiter to an async function.
+    
+    Wraps an async callable so that each invocation first acquires the specified number of tokens from the provided RateLimiter, waiting as needed, and then executes the callable.
+    
+    Parameters:
+        limiter (RateLimiter): Token-bucket limiter used to throttle calls.
+        tokens (int): Number of tokens to consume per invocation (default 1).
+    
+    Returns:
+        Callable: A decorator that wraps an async function to enforce the rate limit on each call.
     """
 
     def decorator(func: Callable) -> Callable:
+        """
+        Wraps an async callable to enforce token-based rate limiting by acquiring tokens from the configured limiter before each invocation.
+        
+        @param func: The asynchronous callable to wrap.
+        @returns: A wrapped coroutine function that acquires `tokens` from `limiter` before calling `func` and returns `func`'s result.
+        """
         @wraps(func)
         async def wrapper(*args, **kwargs) -> Any:
             await limiter.acquire(tokens)

@@ -26,24 +26,35 @@ class CacheEntry(Generic[T]):
     """Single cache entry with expiration."""
 
     def __init__(self, value: T, ttl: float):
-        """Initialize cache entry.
-
-        Args:
-            value: Cached value
-            ttl: Time-to-live in seconds (0 = no expiration)
+        """
+        Create a CacheEntry storing a value with a creation timestamp and TTL.
+        
+        Parameters:
+            value (T): The value to store in the cache.
+            ttl (float): Time-to-live in seconds; 0 means the entry does not expire.
         """
         self.value = value
         self.timestamp = time.time()
         self.ttl = ttl
 
     def is_expired(self) -> bool:
-        """Check if entry has expired."""
+        """
+        Determine whether this cache entry's time-to-live has been exceeded. Entries with a TTL of 0 never expire.
+        
+        Returns:
+            `True` if the elapsed time since the entry's creation is greater than its TTL, `False` otherwise.
+        """
         if self.ttl == 0:
             return False
         return (time.time() - self.timestamp) > self.ttl
 
     def age(self) -> float:
-        """Get age of entry in seconds."""
+        """
+        Age of the cache entry in seconds.
+        
+        Returns:
+            float: Seconds elapsed since the entry was created.
+        """
         return time.time() - self.timestamp
 
 
@@ -51,11 +62,12 @@ class LRUCache(Generic[T]):
     """Thread-safe LRU cache with TTL support."""
 
     def __init__(self, max_size: int = 1000, default_ttl: float = 3600):
-        """Initialize LRU cache.
-
-        Args:
-            max_size: Maximum number of entries
-            default_ttl: Default time-to-live in seconds
+        """
+        Create a new least-recently-used (LRU) in-memory cache with a fixed capacity and default time-to-live.
+        
+        Parameters:
+            max_size (int): Maximum number of entries the cache will hold before evicting the least-recently-used item.
+            default_ttl (float): Default time-to-live for entries in seconds; a value of 0 means entries do not expire.
         """
         self.max_size = max_size
         self.default_ttl = default_ttl
@@ -65,13 +77,13 @@ class LRUCache(Generic[T]):
         self._misses = 0
 
     async def get(self, key: str) -> Optional[T]:
-        """Get value from cache.
-
-        Args:
-            key: Cache key
-
+        """
+        Retrieve the value associated with the given key from the cache.
+        
+        If the entry exists and has not expired, it is marked most-recently-used and its value is returned.
+        
         Returns:
-            Cached value or None if not found/expired
+            The cached value if present and not expired, `None` otherwise.
         """
         async with self._lock:
             entry = self._cache.get(key)
@@ -93,12 +105,15 @@ class LRUCache(Generic[T]):
             return entry.value
 
     async def set(self, key: str, value: T, ttl: Optional[float] = None):
-        """Set value in cache.
-
-        Args:
-            key: Cache key
-            value: Value to cache
-            ttl: Time-to-live in seconds (uses default if None)
+        """
+        Store a value in the in-memory LRU cache under the given key.
+        
+        If the cache is at capacity and the key is new, evict the least-recently-used entry to make room. The entry is recorded with the provided time-to-live (in seconds); if `ttl` is None the cache's `default_ttl` is used. A `ttl` of 0 indicates the entry does not expire. The entry is marked most-recently-used after insertion.
+         
+        Parameters:
+            key (str): Cache key.
+            value (T): Value to store.
+            ttl (Optional[float]): Time-to-live in seconds for this entry; uses the cache's `default_ttl` when None.
         """
         if ttl is None:
             ttl = self.default_ttl
@@ -115,14 +130,22 @@ class LRUCache(Generic[T]):
             logger.debug(f"Cache set: {key} (ttl: {ttl}s)")
 
     async def delete(self, key: str):
-        """Delete entry from cache."""
+        """
+        Remove the entry with the given key from the in-memory cache.
+        
+        If the key exists it will be removed; if it does not exist, no action is taken.
+        """
         async with self._lock:
             if key in self._cache:
                 del self._cache[key]
                 logger.debug(f"Cache delete: {key}")
 
     async def clear(self):
-        """Clear all cache entries."""
+        """
+        Remove all entries from the cache and reset hit/miss counters.
+        
+        This clears the in-memory store and sets the cache's hit and miss counters back to zero.
+        """
         async with self._lock:
             self._cache.clear()
             self._hits = 0
@@ -130,7 +153,11 @@ class LRUCache(Generic[T]):
             logger.info("Cache cleared")
 
     async def cleanup_expired(self):
-        """Remove all expired entries."""
+        """
+        Remove expired entries from the in-memory cache.
+        
+        Deletes cache entries whose TTL has elapsed, mutating the cache state. If any entries are removed, an informational log is emitted.
+        """
         async with self._lock:
             expired_keys = [
                 key for key, entry in self._cache.items()
@@ -144,7 +171,18 @@ class LRUCache(Generic[T]):
                 logger.info(f"Cleaned up {len(expired_keys)} expired cache entries")
 
     def stats(self) -> dict:
-        """Get cache statistics."""
+        """
+        Return cache metrics including current size, capacity, hit/miss counts, hit rate, and utilization.
+        
+        Returns:
+            stats (dict): Mapping with the following keys:
+                - size (int): Number of entries currently stored in the cache.
+                - max_size (int): Configured maximum number of entries the cache can hold.
+                - hits (int): Total number of cache hits.
+                - misses (int): Total number of cache misses.
+                - hit_rate (float): Ratio of hits to total lookups (value between 0 and 1).
+                - utilization (float): Fraction of capacity currently used (value between 0 and 1).
+        """
         total = self._hits + self._misses
         hit_rate = self._hits / total if total > 0 else 0
 
@@ -162,11 +200,15 @@ class PersistentCache:
     """Disk-based cache for long-term storage."""
 
     def __init__(self, cache_dir: str = "data/cache", default_ttl: float = 86400):
-        """Initialize persistent cache.
-
-        Args:
-            cache_dir: Directory to store cache files
-            default_ttl: Default time-to-live in seconds (24 hours default)
+        """
+        Initialize the persistent disk-backed cache and create its storage directory.
+        
+        Parameters:
+            cache_dir (str): Path to the directory where cache files will be stored; directory is created if it does not exist.
+            default_ttl (float): Default time-to-live for cache entries in seconds (default 86400, i.e., 24 hours).
+        
+        Notes:
+            Sets up an internal asyncio lock for concurrent access.
         """
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -174,13 +216,32 @@ class PersistentCache:
         self._lock = asyncio.Lock()
 
     def _get_cache_path(self, key: str) -> Path:
-        """Get file path for cache key."""
+        """
+        Return the filesystem path where a cache entry for the given key is stored.
+        
+        The path is deterministic: it uses the SHA-256 hash of `key` as a safe filename and appends the `.json` extension inside the cache directory.
+        
+        Parameters:
+            key (str): Cache key used to derive the filename.
+        
+        Returns:
+            Path: Filesystem path to the JSON file for the given cache key.
+        """
         # Hash key to create safe filename
         key_hash = hashlib.sha256(key.encode()).hexdigest()
         return self.cache_dir / f"{key_hash}.json"
 
     async def get(self, key: str) -> Optional[Any]:
-        """Get value from persistent cache."""
+        """
+        Retrieve a value from the persistent disk cache for the given key.
+        
+        If a cache file exists for the key and its TTL has not elapsed, the stored value is returned.
+        If the entry is expired, the file is removed and `None` is returned. On missing files or any
+        read/parsing error, `None` is returned.
+        
+        Returns:
+            The stored value if present and not expired, `None` otherwise.
+        """
         cache_path = self._get_cache_path(key)
 
         try:
@@ -208,7 +269,14 @@ class PersistentCache:
             return None
 
     async def set(self, key: str, value: Any, ttl: Optional[float] = None):
-        """Set value in persistent cache."""
+        """
+        Store a value in the persistent disk cache under the given key.
+        
+        Parameters:
+            key (str): Cache key used to identify the entry.
+            value (Any): JSON-serializable value to store.
+            ttl (Optional[float]): Time-to-live in seconds for this entry; if omitted, the cache's default_ttl is used. A value of 0 means the entry does not expire.
+        """
         if ttl is None:
             ttl = self.default_ttl
 
@@ -232,7 +300,11 @@ class PersistentCache:
             logger.warning(f"Error writing persistent cache {key}: {e}")
 
     async def delete(self, key: str):
-        """Delete entry from persistent cache."""
+        """
+        Remove the on-disk cache entry associated with the given key.
+        
+        Deletes the persistent cache file for the key if it exists; I/O errors are caught and logged and will not be raised.
+        """
         cache_path = self._get_cache_path(key)
 
         try:
@@ -244,7 +316,11 @@ class PersistentCache:
             logger.warning(f"Error deleting persistent cache {key}: {e}")
 
     async def clear(self):
-        """Clear all persistent cache entries."""
+        """
+        Clear all entries in the persistent disk cache by deleting every JSON cache file in the cache directory.
+        
+        This operation acquires the cache's async lock to prevent concurrent access; I/O errors are caught and logged rather than raised.
+        """
         try:
             async with self._lock:
                 for cache_file in self.cache_dir.glob("*.json"):
@@ -254,7 +330,13 @@ class PersistentCache:
             logger.warning(f"Error clearing persistent cache: {e}")
 
     async def cleanup_expired(self):
-        """Remove all expired cache files."""
+        """
+        Remove expired entries from the persistent disk cache.
+        
+        Scans JSON cache files in the cache directory and deletes files whose stored
+        timestamp plus TTL is older than the current time. Logs a summary when any
+        entries are removed and emits warnings for individual file-read or cleanup errors.
+        """
         expired_count = 0
 
         try:
@@ -283,7 +365,14 @@ class PersistentCache:
 
 
 def cache_key(*args, **kwargs) -> str:
-    """Generate cache key from function arguments."""
+    """
+    Generate a stable string fragment representing the provided positional and keyword arguments for use in cache keys.
+    
+    Positional arguments are converted to their string form for common scalar types (str, int, float, bool); other objects are represented by their type name. Keyword arguments are sorted by key and formatted as `key=value` for scalar values or `key=TypeName` for non-scalar values. Parts are joined with colons.
+    
+    Returns:
+        key (str): Colon-separated representation of the arguments suitable for use as a cache key fragment.
+    """
     # Convert args and kwargs to a stable string representation
     key_parts = []
 
@@ -308,25 +397,34 @@ def cached(
     ttl: Optional[float] = None,
     key_func: Optional[Callable] = None
 ):
-    """Decorator to cache function results.
-
-    Args:
-        cache: Cache instance to use
-        ttl: Time-to-live for cached result (uses cache default if None)
-        key_func: Function to generate cache key (uses default if None)
-
-    Usage:
-        cache = LRUCache(max_size=100, default_ttl=3600)
-
-        @cached(cache, ttl=1800)
-        async def expensive_operation(param1, param2):
-            # Your code here
-            return result
+    """
+    Create a decorator that caches a function's results in the provided LRUCache.
+    
+    The returned decorator builds a cache key as "func_name:<key_parts>" where <key_parts> is produced by `key_func`. The decorator expects the decorated callable to be asynchronous: it will attempt to retrieve a cached value before awaiting the function and will store the awaited result in the cache.
+    
+    Parameters:
+        cache (LRUCache): Cache instance used to store and retrieve values.
+        ttl (Optional[float]): Time-to-live in seconds for cached entries; if None, the cache's default TTL is used.
+        key_func (Optional[Callable]): Function that receives the decorated function's args and kwargs and returns a stable string fragment for the key; if None, the module's `cache_key` is used.
+    
+    Returns:
+        Callable: A decorator that, when applied to an async function, caches its return value using the constructed key and TTL.
     """
     if key_func is None:
         key_func = cache_key
 
     def decorator(func: Callable) -> Callable:
+        """
+        Wrap an async function so its results are cached in the enclosing LRUCache using the provided key function and TTL.
+        
+        The wrapper builds a composite cache key using the wrapped function's name and the key function's stable representation of the call arguments, returns a cached result when present, and otherwise executes the wrapped function, caches its result with the configured TTL, and returns it.
+        
+        Parameters:
+            func (Callable): The asynchronous function to wrap.
+        
+        Returns:
+            Callable: An async function that returns the wrapped function's result, using cached values when available.
+        """
         @wraps(func)
         async def wrapper(*args, **kwargs) -> Any:
             # Generate cache key
@@ -355,15 +453,30 @@ _persistent_cache = PersistentCache(cache_dir="data/cache", default_ttl=86400)  
 
 
 def get_meta_cache() -> LRUCache:
-    """Get global meta intelligence cache."""
+    """
+    Get the global LRU cache used for meta intelligence data.
+    
+    Returns:
+        LRUCache: The module-level cache instance configured for meta intelligence entries.
+    """
     return _meta_cache
 
 
 def get_deck_cache() -> LRUCache:
-    """Get global deck analysis cache."""
+    """
+    Access the global LRU cache used for deck analyses.
+    
+    Returns:
+        The global LRUCache instance used for caching deck analysis results.
+    """
     return _deck_cache
 
 
 def get_persistent_cache() -> PersistentCache:
-    """Get global persistent cache."""
+    """
+    Return the module's shared disk-backed persistent cache instance.
+    
+    Returns:
+        The singleton PersistentCache used for long-term (disk) caching.
+    """
     return _persistent_cache

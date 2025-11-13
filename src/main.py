@@ -45,7 +45,19 @@ app.include_router(router, prefix="/api/v1", tags=["decks"])
 
 @app.get("/")
 async def root():
-    """Root endpoint."""
+    """
+    Return service metadata for the API root.
+    
+    Provides the service name, package version, a short description, the docs path, and a note about MCP server usage.
+    
+    Returns:
+        dict: Metadata with keys:
+            - "service": service name string
+            - "version": package version string
+            - "description": short service description string
+            - "docs": path to interactive documentation string
+            - "mcp_server": note about MCP protocol access string
+    """
     return {
         "service": "Arena Improver",
         "version": __version__,
@@ -57,9 +69,14 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """Basic health check endpoint.
-
-    Returns 200 OK if service is running.
+    """
+    Return a minimal service health payload.
+    
+    Returns:
+        dict: A JSON-serializable mapping with keys:
+            - "status": the service health state, always set to "healthy".
+            - "timestamp": current UTC time as an ISO 8601 string.
+            - "version": the service version string.
     """
     return {
         "status": "healthy",
@@ -70,9 +87,17 @@ async def health_check():
 
 @app.get("/health/ready")
 async def readiness_check():
-    """Readiness probe for Kubernetes/Docker deployments.
-
-    Checks if service is ready to accept requests.
+    """
+    Perform a readiness probe that verifies database connectivity.
+    
+    Returns:
+        dict: On success, a JSON-serializable mapping with keys:
+            - `status`: "ready"
+            - `timestamp`: ISO 8601 UTC timestamp string
+            - `checks`: mapping of individual check results (e.g., `{"database": "connected"}`).
+        fastapi.Response: On failure, an HTTP 503 Response with a JSON body containing:
+            - `status`: "not_ready"
+            - `error`: error message describing the failure.
     """
     try:
         # Check database connectivity
@@ -95,9 +120,13 @@ async def readiness_check():
 
 @app.get("/health/live")
 async def liveness_check():
-    """Liveness probe for Kubernetes/Docker deployments.
-
-    Returns 200 if process is alive (for restart decisions).
+    """
+    Return liveness status with current UTC timestamp.
+    
+    Returns:
+        dict: A mapping containing:
+            - status (str): "alive".
+            - timestamp (str): ISO 8601-formatted UTC timestamp.
     """
     return {
         "status": "alive",
@@ -107,9 +136,27 @@ async def liveness_check():
 
 @app.get("/metrics")
 async def metrics():
-    """Prometheus-compatible metrics endpoint.
-
-    Returns application metrics for monitoring.
+    """
+    Return Prometheus-compatible application metrics for monitoring.
+    
+    Returns:
+        dict: A JSON-serializable mapping with the following keys:
+            timestamp (str): UTC ISO-8601 timestamp of metric sample.
+            version (str): Service version string.
+            system (dict): Runtime system metrics:
+                cpu_percent (float): CPU usage percent for the current process.
+                memory_mb (float): Resident memory in megabytes.
+                memory_percent (float): Memory usage percent for the current process.
+                num_threads (int): Number of threads used by the process.
+                open_files (int): Count of open file descriptors.
+            cache (dict): Cache statistics for meta and deck caches:
+                meta (dict) and deck (dict) each contain:
+                    size (int): Current number of entries.
+                    max_size (int|None): Maximum configured entries (if available).
+                    hit_rate (float): Hit rate rounded to 3 decimal places.
+                    hits (int): Number of cache hits.
+                    misses (int): Number of cache misses.
+                    utilization (float): Cache utilization rounded to 3 decimal places.
     """
     # Get cache statistics
     meta_cache = get_meta_cache()
@@ -154,9 +201,26 @@ async def metrics():
 
 @app.get("/status")
 async def status():
-    """Detailed service status for monitoring dashboards.
-
-    Returns comprehensive status including dependencies.
+    """
+    Provide detailed service status intended for monitoring dashboards.
+    
+    Includes UTC timestamp, service name and version, environment variable presence for external APIs, dependency summaries (database and cache sizes), and feature-flag booleans derived from environment configuration.
+    
+    Returns:
+        dict: A mapping with the following keys:
+            - service (str): Service name.
+            - version (str): Service version.
+            - status (str): High-level operational state.
+            - timestamp (str): ISO8601 UTC timestamp.
+            - environment (dict): Presence state for keys "OPENAI_API_KEY", "TAVILY_API_KEY", and "EXA_API_KEY" with values "configured" or "missing".
+            - dependencies (dict): Dependency info containing:
+                - database (str): Database connectivity state.
+                - cache (dict): Cache summaries with "meta" and "deck" values formatted as "<size>/<max_size> entries".
+            - features (dict): Feature flags:
+                - deck_analysis (bool)
+                - ai_optimization (bool)
+                - meta_intelligence (bool)
+                - semantic_search (bool)
     """
     # Check environment variables
     env_status = {
