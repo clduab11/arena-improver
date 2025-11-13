@@ -322,7 +322,7 @@ class PersistentCache:
 
 def cache_key(*args, **kwargs) -> str:
     """Generate cache key from function arguments."""
-    import json
+    
     
     # Convert args and kwargs to a stable string representation
     key_parts = []
