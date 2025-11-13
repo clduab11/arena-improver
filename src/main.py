@@ -3,6 +3,7 @@
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from fastapi import FastAPI, Response
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import psutil
@@ -86,10 +87,12 @@ async def readiness_check():
             }
         }
     except Exception as e:
-        return Response(
-            content=f'{{"status": "not_ready", "error": "{str(e)}"}}',
-            status_code=503,
-            media_type="application/json"
+        return JSONResponse(
+            content={
+                "status": "not_ready",
+                "error": str(e)
+            },
+            status_code=503
         )
 
 
