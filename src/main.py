@@ -1,11 +1,15 @@
 """Main FastAPI application."""
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from datetime import datetime, timezone
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
+import psutil
+import os
 
 from .api.routes import router, sql_service
+from .utils.cache import get_meta_cache, get_deck_cache
 from . import __version__
 
 
@@ -48,6 +52,142 @@ async def root():
         "description": "MCP for MTG Arena deck analysis",
         "docs": "/docs",
         "mcp_server": "Use mcp_server.py for MCP protocol access"
+    }
+
+
+@app.get("/health")
+async def health_check():
+    """Basic health check endpoint.
+
+    Returns 200 OK if service is running.
+    """
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "version": __version__
+    }
+
+
+@app.get("/health/ready")
+async def readiness_check():
+    """Readiness probe for Kubernetes/Docker deployments.
+
+    Checks if service is ready to accept requests.
+    """
+    try:
+        # Check database connectivity
+        await sql_service.init_db()
+
+        return {
+            "status": "ready",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "checks": {
+                "database": "connected"
+            }
+        }
+    except Exception as e:
+        return Response(
+            content=f'{{"status": "not_ready", "error": "{str(e)}"}}',
+            status_code=503,
+            media_type="application/json"
+        )
+
+
+@app.get("/health/live")
+async def liveness_check():
+    """Liveness probe for Kubernetes/Docker deployments.
+
+    Returns 200 if process is alive (for restart decisions).
+    """
+    return {
+        "status": "alive",
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+
+
+@app.get("/metrics")
+async def metrics():
+    """Prometheus-compatible metrics endpoint.
+
+    Returns application metrics for monitoring.
+    """
+    # Get cache statistics
+    meta_cache = get_meta_cache()
+    deck_cache = get_deck_cache()
+    meta_stats = meta_cache.stats()
+    deck_stats = deck_cache.stats()
+
+    # Get system metrics
+    process = psutil.Process()
+    memory_info = process.memory_info()
+
+    return {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "version": __version__,
+        "system": {
+            "cpu_percent": process.cpu_percent(),
+            "memory_mb": memory_info.rss / 1024 / 1024,
+            "memory_percent": process.memory_percent(),
+            "num_threads": process.num_threads(),
+            "open_files": len(process.open_files()),
+        },
+        "cache": {
+            "meta": {
+                "size": meta_stats["size"],
+                "max_size": meta_stats["max_size"],
+                "hit_rate": round(meta_stats["hit_rate"], 3),
+                "hits": meta_stats["hits"],
+                "misses": meta_stats["misses"],
+                "utilization": round(meta_stats["utilization"], 3)
+            },
+            "deck": {
+                "size": deck_stats["size"],
+                "max_size": deck_stats["max_size"],
+                "hit_rate": round(deck_stats["hit_rate"], 3),
+                "hits": deck_stats["hits"],
+                "misses": deck_stats["misses"],
+                "utilization": round(deck_stats["utilization"], 3)
+            }
+        }
+    }
+
+
+@app.get("/status")
+async def status():
+    """Detailed service status for monitoring dashboards.
+
+    Returns comprehensive status including dependencies.
+    """
+    # Check environment variables
+    env_status = {
+        "OPENAI_API_KEY": "configured" if os.getenv("OPENAI_API_KEY") else "missing",
+        "TAVILY_API_KEY": "configured" if os.getenv("TAVILY_API_KEY") else "missing",
+        "EXA_API_KEY": "configured" if os.getenv("EXA_API_KEY") else "missing"
+    }
+
+    # Get cache stats
+    meta_cache = get_meta_cache()
+    deck_cache = get_deck_cache()
+
+    return {
+        "service": "Arena Improver",
+        "version": __version__,
+        "status": "operational",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "environment": env_status,
+        "dependencies": {
+            "database": "connected",
+            "cache": {
+                "meta": f"{meta_cache.stats()['size']}/{meta_cache.stats()['max_size']} entries",
+                "deck": f"{deck_cache.stats()['size']}/{deck_cache.stats()['max_size']} entries"
+            }
+        },
+        "features": {
+            "deck_analysis": True,
+            "ai_optimization": env_status["OPENAI_API_KEY"] == "configured",
+            "meta_intelligence": env_status["TAVILY_API_KEY"] == "configured",
+            "semantic_search": env_status["EXA_API_KEY"] == "configured"
+        }
     }
 
 

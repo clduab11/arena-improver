@@ -30,3 +30,4 @@ httpx==0.28.1
 
 # Utilities
 python-dotenv==1.0.1
+psutil==6.1.0
