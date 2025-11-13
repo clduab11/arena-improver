@@ -24,12 +24,15 @@
 
 ### Includes
 
-✅ 30 mainboard cards with full metadata
+✅ 100-card Commander deck (1 commander + 99 other cards)
 ✅ Meta analysis (strengths, weaknesses, matchups)
 ✅ Key synergies documentation
 ✅ Budget alternatives ($80 in savings)
 ✅ Upgrade path (3 prioritized cards)
 ✅ Strategic insights
+✅ 28 creatures with token synergies
+✅ 37 lands for consistent mana
+✅ Ramp, card draw, and removal suite
 
 ### Example Output
 

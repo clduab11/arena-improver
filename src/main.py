@@ -3,14 +3,19 @@
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from fastapi import FastAPI, Response
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import psutil
 import os
+import logging
+from sqlalchemy.exc import SQLAlchemyError
 
 from .api.routes import router, sql_service
 from .utils.cache import get_meta_cache, get_deck_cache
 from . import __version__
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -85,11 +90,27 @@ async def readiness_check():
                 "database": "connected"
             }
         }
+    except SQLAlchemyError as e:
+        # Log the actual error for debugging
+        logger.error(f"Database initialization failed: {e}", exc_info=True)
+        
+        return JSONResponse(
+            content={
+                "status": "not_ready",
+                "error": "Database initialization failed"
+            },
+            status_code=503
+        )
     except Exception as e:
-        return Response(
-            content=f'{{"status": "not_ready", "error": "{str(e)}"}}',
-            status_code=503,
-            media_type="application/json"
+        # Log unexpected errors for debugging
+        logger.error(f"Unexpected readiness check failure: {e}", exc_info=True)
+        
+        return JSONResponse(
+            content={
+                "status": "not_ready",
+                "error": "Service initialization failed"
+            },
+            status_code=503
         )
 
 

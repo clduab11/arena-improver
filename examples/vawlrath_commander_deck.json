@@ -231,6 +231,384 @@
       "collector_number": "145"
     },
     {
+      "name": "Skirk Prospector",
+      "quantity": 1,
+      "card_type": "Creature - Goblin",
+      "cmc": 1,
+      "colors": ["R"],
+      "set": "DOM",
+      "collector_number": "144"
+    },
+    {
+      "name": "Mogg War Marshal",
+      "quantity": 1,
+      "card_type": "Creature - Goblin Warrior",
+      "cmc": 2,
+      "colors": ["R"],
+      "set": "EMA",
+      "collector_number": "139"
+    },
+    {
+      "name": "Dragon Fodder",
+      "quantity": 1,
+      "card_type": "Sorcery",
+      "cmc": 2,
+      "colors": ["R"],
+      "set": "M19",
+      "collector_number": "133"
+    },
+    {
+      "name": "Hordeling Outburst",
+      "quantity": 1,
+      "card_type": "Sorcery",
+      "cmc": 3,
+      "colors": ["R"],
+      "set": "KTK",
+      "collector_number": "111"
+    },
+    {
+      "name": "Young Pyromancer",
+      "quantity": 1,
+      "card_type": "Creature - Human Shaman",
+      "cmc": 2,
+      "colors": ["R"],
+      "set": "M14",
+      "collector_number": "163"
+    },
+    {
+      "name": "Siege-Gang Commander",
+      "quantity": 1,
+      "card_type": "Creature - Goblin",
+      "cmc": 5,
+      "colors": ["R"],
+      "set": "DOM",
+      "collector_number": "143"
+    },
+    {
+      "name": "Hellraiser Goblin",
+      "quantity": 1,
+      "card_type": "Creature - Goblin Berserker",
+      "cmc": 3,
+      "colors": ["R"],
+      "set": "GTC",
+      "collector_number": "95"
+    },
+    {
+      "name": "Goblin Trashmaster",
+      "quantity": 1,
+      "card_type": "Creature - Goblin Warrior",
+      "cmc": 4,
+      "colors": ["R"],
+      "set": "M19",
+      "collector_number": "144"
+    },
+    {
+      "name": "Urabrask the Hidden",
+      "quantity": 1,
+      "card_type": "Legendary Creature - Phyrexian Praetor",
+      "cmc": 5,
+      "colors": ["R"],
+      "set": "NPH",
+      "collector_number": "98"
+    },
+    {
+      "name": "Zealous Conscripts",
+      "quantity": 1,
+      "card_type": "Creature - Human Warrior",
+      "cmc": 5,
+      "colors": ["R"],
+      "set": "AVR",
+      "collector_number": "166"
+    },
+    {
+      "name": "Avenger of Zendikar",
+      "quantity": 1,
+      "card_type": "Creature - Elemental",
+      "cmc": 7,
+      "colors": ["G"],
+      "set": "C18",
+      "collector_number": "129"
+    },
+    {
+      "name": "Tendershoot Dryad",
+      "quantity": 1,
+      "card_type": "Creature - Dryad",
+      "cmc": 5,
+      "colors": ["G"],
+      "set": "RIX",
+      "collector_number": "147"
+    },
+    {
+      "name": "Scute Swarm",
+      "quantity": 1,
+      "card_type": "Creature - Insect",
+      "cmc": 3,
+      "colors": ["G"],
+      "set": "ZNR",
+      "collector_number": "203"
+    },
+    {
+      "name": "Dragonlair Spider",
+      "quantity": 1,
+      "card_type": "Creature - Spider",
+      "cmc": 6,
+      "colors": ["R", "G"],
+      "set": "C18",
+      "collector_number": "163"
+    },
+    {
+      "name": "Hornet Queen",
+      "quantity": 1,
+      "card_type": "Creature - Insect",
+      "cmc": 7,
+      "colors": ["G"],
+      "set": "M15",
+      "collector_number": "178"
+    },
+    {
+      "name": "Ohran Frostfang",
+      "quantity": 1,
+      "card_type": "Snow Creature - Snake",
+      "cmc": 4,
+      "colors": ["G"],
+      "set": "C19",
+      "collector_number": "33"
+    },
+    {
+      "name": "Rampaging Baloths",
+      "quantity": 1,
+      "card_type": "Creature - Beast",
+      "cmc": 6,
+      "colors": ["G"],
+      "set": "ZEN",
+      "collector_number": "178"
+    },
+    {
+      "name": "Sakura-Tribe Elder",
+      "quantity": 1,
+      "card_type": "Creature - Snake Shaman",
+      "cmc": 2,
+      "colors": ["G"],
+      "set": "C16",
+      "collector_number": "164"
+    },
+    {
+      "name": "Wood Elves",
+      "quantity": 1,
+      "card_type": "Creature - Elf Scout",
+      "cmc": 3,
+      "colors": ["G"],
+      "set": "DDG",
+      "collector_number": "55"
+    },
+    {
+      "name": "Farhaven Elf",
+      "quantity": 1,
+      "card_type": "Creature - Elf Druid",
+      "cmc": 3,
+      "colors": ["G"],
+      "set": "C19",
+      "collector_number": "161"
+    },
+    {
+      "name": "Skyshroud Claim",
+      "quantity": 1,
+      "card_type": "Sorcery",
+      "cmc": 4,
+      "colors": ["G"],
+      "set": "NEM",
+      "collector_number": "117"
+    },
+    {
+      "name": "Rampant Growth",
+      "quantity": 1,
+      "card_type": "Sorcery",
+      "cmc": 2,
+      "colors": ["G"],
+      "set": "M12",
+      "collector_number": "190"
+    },
+    {
+      "name": "Three Visits",
+      "quantity": 1,
+      "card_type": "Sorcery",
+      "cmc": 2,
+      "colors": ["G"],
+      "set": "CMR",
+      "collector_number": "261"
+    },
+    {
+      "name": "Return of the Wildspeaker",
+      "quantity": 1,
+      "card_type": "Instant",
+      "cmc": 5,
+      "colors": ["G"],
+      "set": "ELD",
+      "collector_number": "172"
+    },
+    {
+      "name": "Shamanic Revelation",
+      "quantity": 1,
+      "card_type": "Sorcery",
+      "cmc": 5,
+      "colors": ["G"],
+      "set": "C16",
+      "collector_number": "167"
+    },
+    {
+      "name": "Greater Good",
+      "quantity": 1,
+      "card_type": "Enchantment",
+      "cmc": 4,
+      "colors": ["G"],
+      "set": "BBD",
+      "collector_number": "201"
+    },
+    {
+      "name": "Guardian Project",
+      "quantity": 1,
+      "card_type": "Enchantment",
+      "cmc": 4,
+      "colors": ["G"],
+      "set": "RNA",
+      "collector_number": "130"
+    },
+    {
+      "name": "Blasphemous Act",
+      "quantity": 1,
+      "card_type": "Sorcery",
+      "cmc": 9,
+      "colors": ["R"],
+      "set": "C21",
+      "collector_number": "159"
+    },
+    {
+      "name": "Beast Within",
+      "quantity": 1,
+      "card_type": "Instant",
+      "cmc": 3,
+      "colors": ["G"],
+      "set": "NPH",
+      "collector_number": "103"
+    },
+    {
+      "name": "Hull Breach",
+      "quantity": 1,
+      "card_type": "Sorcery",
+      "cmc": 2,
+      "colors": ["R", "G"],
+      "set": "C13",
+      "collector_number": "168"
+    },
+    {
+      "name": "Artifact Mutation",
+      "quantity": 1,
+      "card_type": "Instant",
+      "cmc": 2,
+      "colors": ["R", "G"],
+      "set": "C14",
+      "collector_number": "37"
+    },
+    {
+      "name": "Krosan Grip",
+      "quantity": 1,
+      "card_type": "Instant",
+      "cmc": 3,
+      "colors": ["G"],
+      "set": "TSP",
+      "collector_number": "207"
+    },
+    {
+      "name": "Vandalblast",
+      "quantity": 1,
+      "card_type": "Sorcery",
+      "cmc": 1,
+      "colors": ["R"],
+      "set": "RTR",
+      "collector_number": "110"
+    },
+    {
+      "name": "Firecat Blitz",
+      "quantity": 1,
+      "card_type": "Sorcery",
+      "cmc": 3,
+      "colors": ["R"],
+      "set": "ONS",
+      "collector_number": "196"
+    },
+    {
+      "name": "Swiftfoot Boots",
+      "quantity": 1,
+      "card_type": "Artifact - Equipment",
+      "cmc": 2,
+      "colors": ["C"],
+      "set": "C21",
+      "collector_number": "263"
+    },
+    {
+      "name": "Gruul Signet",
+      "quantity": 1,
+      "card_type": "Artifact",
+      "cmc": 2,
+      "colors": ["C"],
+      "set": "GK2",
+      "collector_number": "14"
+    },
+    {
+      "name": "Talisman of Impulse",
+      "quantity": 1,
+      "card_type": "Artifact",
+      "cmc": 2,
+      "colors": ["C"],
+      "set": "MH1",
+      "collector_number": "233"
+    },
+    {
+      "name": "Arcane Signet",
+      "quantity": 1,
+      "card_type": "Artifact",
+      "cmc": 2,
+      "colors": ["C"],
+      "set": "ELD",
+      "collector_number": "331"
+    },
+    {
+      "name": "Kessig Wolf Run",
+      "quantity": 1,
+      "card_type": "Land",
+      "cmc": 0,
+      "colors": [],
+      "set": "ISD",
+      "collector_number": "243"
+    },
+    {
+      "name": "Rootbound Crag",
+      "quantity": 1,
+      "card_type": "Land",
+      "cmc": 0,
+      "colors": [],
+      "set": "XLN",
+      "collector_number": "256"
+    },
+    {
+      "name": "Game Trail",
+      "quantity": 1,
+      "card_type": "Land",
+      "cmc": 0,
+      "colors": [],
+      "set": "SOI",
+      "collector_number": "276"
+    },
+    {
+      "name": "Temple of Abandon",
+      "quantity": 1,
+      "card_type": "Land",
+      "cmc": 0,
+      "colors": [],
+      "set": "THB",
+      "collector_number": "244"
+    },
+    {
       "name": "Stomping Ground",
       "quantity": 1,
       "card_type": "Land - Mountain Forest",

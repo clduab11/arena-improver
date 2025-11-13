@@ -183,25 +183,35 @@ class PersistentCache:
         """Get value from persistent cache."""
         cache_path = self._get_cache_path(key)
 
-        try:
-            async with self._lock:
-                if not cache_path.exists():
-                    return None
+        def _read_and_check() -> Optional[Any]:
+            """Blocking I/O operation to read and check cache file."""
+            if not cache_path.exists():
+                return None
 
+            try:
                 with open(cache_path, 'r') as f:
                     data = json.load(f)
+            except json.JSONDecodeError as e:
+                # Handle partially written or corrupted files
+                logger.warning(f"Corrupted cache file {key}: {e}")
+                return None
 
-                # Check expiration
-                timestamp = data.get('timestamp', 0)
-                ttl = data.get('ttl', self.default_ttl)
+            # Check expiration
+            timestamp = data.get('timestamp', 0)
+            ttl = data.get('ttl', self.default_ttl)
 
-                if ttl > 0 and (time.time() - timestamp) > ttl:
-                    logger.debug(f"Persistent cache expired: {key}")
-                    cache_path.unlink()  # Delete expired file
-                    return None
+            if ttl > 0 and (time.time() - timestamp) > ttl:
+                logger.debug(f"Persistent cache expired: {key}")
+                cache_path.unlink()  # Delete expired file
+                return None
 
-                logger.debug(f"Persistent cache hit: {key}")
-                return data.get('value')
+            logger.debug(f"Persistent cache hit: {key}")
+            return data.get('value')
+
+        try:
+            # Read under lock to prevent seeing partially written files
+            async with self._lock:
+                return await asyncio.to_thread(_read_and_check)
 
         except Exception as e:
             logger.warning(f"Error reading persistent cache {key}: {e}")
@@ -214,19 +224,29 @@ class PersistentCache:
 
         cache_path = self._get_cache_path(key)
 
+        def _write_file() -> None:
+            """Blocking I/O operation to write cache file atomically."""
+            data = {
+                'key': key,
+                'value': value,
+                'timestamp': time.time(),
+                'ttl': ttl
+            }
+
+            # Write to temp file first, then atomic rename to prevent partial reads
+            temp_path = cache_path.with_suffix('.tmp')
+            with open(temp_path, 'w') as f:
+                json.dump(data, f, indent=2)
+            temp_path.replace(cache_path)  # Atomic on POSIX systems
+
+            logger.debug(f"Persistent cache set: {key}")
+
         try:
             async with self._lock:
-                data = {
-                    'key': key,
-                    'value': value,
-                    'timestamp': time.time(),
-                    'ttl': ttl
-                }
-
-                with open(cache_path, 'w') as f:
-                    json.dump(data, f, indent=2)
-
-                logger.debug(f"Persistent cache set: {key}")
+                # Ensure directory exists while holding lock
+                self.cache_dir.mkdir(parents=True, exist_ok=True)
+                # Perform I/O while holding lock to prevent race conditions
+                await asyncio.to_thread(_write_file)
 
         except Exception as e:
             logger.warning(f"Error writing persistent cache {key}: {e}")
@@ -235,45 +255,64 @@ class PersistentCache:
         """Delete entry from persistent cache."""
         cache_path = self._get_cache_path(key)
 
+        def _delete_file():
+            """Blocking I/O operation to delete cache file."""
+            if cache_path.exists():
+                cache_path.unlink()
+                logger.debug(f"Persistent cache delete: {key}")
+
         try:
-            async with self._lock:
-                if cache_path.exists():
-                    cache_path.unlink()
-                    logger.debug(f"Persistent cache delete: {key}")
+            # Perform blocking I/O in thread pool
+            await asyncio.to_thread(_delete_file)
         except Exception as e:
             logger.warning(f"Error deleting persistent cache {key}: {e}")
 
     async def clear(self):
         """Clear all persistent cache entries."""
+        
+        def _clear_files():
+            """Blocking I/O operation to clear all cache files."""
+            for cache_file in self.cache_dir.glob("*.json"):
+                cache_file.unlink()
+            logger.info("Persistent cache cleared")
+        
         try:
-            async with self._lock:
-                for cache_file in self.cache_dir.glob("*.json"):
-                    cache_file.unlink()
-                logger.info("Persistent cache cleared")
+            # Perform blocking I/O in thread pool
+            await asyncio.to_thread(_clear_files)
         except Exception as e:
             logger.warning(f"Error clearing persistent cache: {e}")
 
     async def cleanup_expired(self):
         """Remove all expired cache files."""
-        expired_count = 0
+        
+        def _cleanup_one_file(cache_file):
+            """Check and remove one expired cache file."""
+            try:
+                with open(cache_file, 'r') as f:
+                    data = json.load(f)
+
+                timestamp = data.get('timestamp', 0)
+                ttl = data.get('ttl', self.default_ttl)
+
+                if ttl > 0 and (time.time() - timestamp) > ttl:
+                    cache_file.unlink()
+                    return True  # File was expired and removed
+                return False  # File is still valid
+            except Exception as e:
+                logger.warning(f"Error checking cache file {cache_file}: {e}")
+                return False
+
+        def _cleanup_all():
+            """Blocking I/O operation to cleanup expired files."""
+            expired_count = 0
+            for cache_file in self.cache_dir.glob("*.json"):
+                if _cleanup_one_file(cache_file):
+                    expired_count += 1
+            return expired_count
 
         try:
-            async with self._lock:
-                for cache_file in self.cache_dir.glob("*.json"):
-                    try:
-                        with open(cache_file, 'r') as f:
-                            data = json.load(f)
-
-                        timestamp = data.get('timestamp', 0)
-                        ttl = data.get('ttl', self.default_ttl)
-
-                        if ttl > 0 and (time.time() - timestamp) > ttl:
-                            cache_file.unlink()
-                            expired_count += 1
-
-                    except Exception as e:
-                        logger.warning(f"Error checking cache file {cache_file}: {e}")
-                        continue
+            # Perform blocking I/O in thread pool
+            expired_count = await asyncio.to_thread(_cleanup_all)
 
             if expired_count > 0:
                 logger.info(f"Cleaned up {expired_count} expired persistent cache entries")
@@ -284,21 +323,38 @@ class PersistentCache:
 
 def cache_key(*args, **kwargs) -> str:
     """Generate cache key from function arguments."""
+    
     # Convert args and kwargs to a stable string representation
     key_parts = []
 
-    for arg in args:
-        if isinstance(arg, (str, int, float, bool)):
-            key_parts.append(str(arg))
+    def serialize_value(value):
+        """Serialize a value to a stable string representation."""
+        if isinstance(value, (str, int, float, bool, type(None))):
+            # For primitives, use simple string representation
+            # Use json.dumps for strings to handle escaping, but remove quotes
+            if isinstance(value, str):
+                # Use JSON serialization for proper escaping, then strip quotes
+                json_str = json.dumps(value, sort_keys=True)
+                return json_str[1:-1] if json_str.startswith('"') else json_str
+            else:
+                return str(value)
+        elif isinstance(value, (list, tuple)):
+            # Recursively serialize sequences - JSON serialize entire structure
+            return json.dumps(value, default=str, sort_keys=True)
+        elif isinstance(value, dict):
+            # Recursively serialize dicts with sorted keys
+            return json.dumps(value, default=str, sort_keys=True)
         else:
-            # Use type name for complex objects
-            key_parts.append(f"{type(arg).__name__}")
+            # Use a stable hash for non-serializable types
+            # Avoid repr() as it can include memory addresses
+            return f"{type(value).__module__}.{type(value).__qualname__}:{hash(str(value))}"
+
+    for arg in args:
+        key_parts.append(serialize_value(arg))
 
     for k, v in sorted(kwargs.items()):
-        if isinstance(v, (str, int, float, bool)):
-            key_parts.append(f"{k}={v}")
-        else:
-            key_parts.append(f"{k}={type(v).__name__}")
+        serialized = serialize_value(v)
+        key_parts.append(f"{k}={serialized}")
 
     return ":".join(key_parts)
 

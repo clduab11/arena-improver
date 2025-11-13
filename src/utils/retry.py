@@ -211,11 +211,14 @@ class CircuitBreaker:
         try:
             result = await func(*args, **kwargs)
 
-            # Success - reset if we were in HALF_OPEN
+            # Success - always reset failure tracking
+            self._failure_count = 0
+            self._last_failure_time = None
+            
+            # Transition from HALF_OPEN to CLOSED if we were testing
             if self._state == "HALF_OPEN":
                 logger.info("Circuit breaker entering CLOSED state (service recovered)")
                 self._state = "CLOSED"
-                self._failure_count = 0
 
             return result
 
