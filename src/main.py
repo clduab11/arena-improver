@@ -12,6 +12,7 @@ import logging
 from sqlalchemy.exc import SQLAlchemyError
 
 from .api.routes import router, sql_service
+from .api.websocket_routes import router as ws_router
 from .utils.cache import get_meta_cache, get_deck_cache
 from . import __version__
 

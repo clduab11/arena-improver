@@ -5,7 +5,8 @@
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0.html)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![Hackathon: Vibe.Code.Ship](https://img.shields.io/badge/Hackathon-Vibe.Code.Ship-purple.svg)](https://devpost.com)
+[![Hackathon: MCP 1st Birthday](https://img.shields.io/badge/Hackathon-MCP%201st%20Birthday-purple.svg)](https://huggingface.co/MCP-1st-Birthday)
+[![HF Space](https://img.shields.io/badge/🤗-Hugging%20Face%20Space-yellow.svg)](https://huggingface.co/spaces/MCP-1st-Birthday/vawlrath)
 
 ## 🎯 What This Is
 
@@ -59,6 +60,18 @@ python -c "import asyncio; from src.services.smart_sql import SmartSQLService; a
 ```
 
 Done? Good. Moving on.
+
+---
+
+## 🚀 Try It Now
+
+Want to see it in action without installing anything? Check out the **[Hugging Face Space](https://huggingface.co/spaces/MCP-1st-Birthday/vawlrath)**!
+
+The Space provides:
+- **Interactive API Documentation**: Test all endpoints directly in your browser
+- **Live Demo**: See Vawlrathh in action
+- **No Setup Required**: Just visit and start using
+- **Auto-Synced**: Always running the latest code from the main branch
 
 ---
 
@@ -368,10 +381,12 @@ Already set up in `mcp_config.json`. Don't touch it unless you know what you're 
 
 ## 📚 Documentation
 
+- **[HF Deployment Guide](docs/HF_DEPLOYMENT.md)**: Hugging Face Space setup and configuration
 - **[Hackathon Features](docs/HACKATHON_FEATURES.md)**: Complete feature breakdown
 - **[Steam Arena Guide](docs/STEAM_ARENA_GUIDE.md)**: Platform-specific help
 - **[MCP Security](docs/MCP_SECURITY.md)**: Security best practices
-- **[API Docs](http://localhost:8000/docs)**: Interactive API documentation (when running)
+- **[API Docs](http://localhost:8000/docs)**: Interactive API documentation (when running locally)
+- **[Live API Docs](https://huggingface.co/spaces/MCP-1st-Birthday/vawlrath)**: Try the API in the HF Space
 
 ---
 
@@ -406,8 +421,9 @@ Want to improve this? Fine. Here's how:
 
 ## 🎖️ Hackathon Submission
 
-**Event**: Vibe. Code. Ship. - LiquidMetal Edition
+**Event**: MCP 1st Birthday Hackathon
 **Submission**: Arena Improver with Vawlrathh Integration
+**Live Demo**: [Hugging Face Space](https://huggingface.co/spaces/MCP-1st-Birthday/vawlrath)
 
 ### Key Differentiators
 
@@ -415,8 +431,9 @@ Want to improve this? Fine. Here's how:
 2. **Physical Card Integration**: Arena-only filtering + vendor pricing
 3. **Character-Driven UX**: Vawlrathh's personality (me)
 4. **Sequential Reasoning**: Multi-step decision analysis
-5. **Event Logging**: Complete audit trail for judging
+5. **Event Logging**: Complete audit trail
 6. **Full MCP Depth**: Memory, sequential thinking, omnisearch
+7. **Hugging Face Space**: Live demo with auto-sync from GitHub
 
 ### Metrics
 
