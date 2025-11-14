@@ -118,6 +118,7 @@ uvicorn src.main:app --reload --port 8000
 Access:
 - API Docs: http://localhost:8000/docs
 - Health Check: http://localhost:8000/health
+- WebSocket Chat Endpoint: ws://localhost:8000/api/v1/ws/chat/{client_id}
 
 #### Option B: Full HF Space Setup (Gradio + FastAPI)
 
