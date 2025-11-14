@@ -30,14 +30,15 @@ DOCS_URL = f"/proxy/{FASTAPI_PORT}/docs"  # HF Space proxy pattern
 def kill_existing_uvicorn():
     """Kill any existing uvicorn processes to avoid port conflicts."""
     try:
-        # Find and kill existing uvicorn processes
+        # Find and kill existing uvicorn processes running on our port
+        # More specific pattern to avoid killing unrelated processes
         result = subprocess.run(
-            ["pkill", "-9", "-f", "uvicorn"],
+            ["pkill", "-9", "-f", f"uvicorn.*{FASTAPI_PORT}"],
             capture_output=True,
             text=True
         )
         if result.returncode == 0:
-            logger.info("Killed existing uvicorn processes")
+            logger.info(f"Killed existing uvicorn processes on port {FASTAPI_PORT}")
         time.sleep(1)  # Give processes time to clean up
     except Exception as e:
         logger.warning(f"Error killing uvicorn processes: {e}")
