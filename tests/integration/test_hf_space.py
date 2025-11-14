@@ -2,7 +2,6 @@
 
 import subprocess
 import time
-import pytest
 import httpx
 
 
@@ -57,7 +56,11 @@ def test_fastapi_server_can_start():
     finally:
         # Clean up
         process.terminate()
-        process.wait(timeout=10)
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
         kill_existing_uvicorn()
 
 

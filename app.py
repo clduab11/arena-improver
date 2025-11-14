@@ -8,13 +8,11 @@ for deployment on Hugging Face Spaces. The FastAPI server runs on port 7860
 — Vawlrathh, The Small'n
 """
 
-import asyncio
 import os
 import subprocess
 import sys
 import time
 import logging
-from pathlib import Path
 
 import gradio as gr
 import httpx
@@ -61,9 +59,8 @@ def start_fastapi_server():
                 "--port", str(FASTAPI_PORT),
                 "--log-level", "info"
             ],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
         )
         
         logger.info(f"FastAPI server started with PID {process.pid}")
@@ -115,29 +112,27 @@ def check_environment():
         "EXA_API_KEY": "Recommended for semantic search",
     }
     
-    missing_required = []
-    missing_optional = []
+    has_missing_required = False
     
     for key, description in required_keys.items():
         if os.getenv(key):
             env_status[key] = "✓ Configured"
         else:
             env_status[key] = f"✗ Missing - {description}"
-            missing_required.append(key)
+            has_missing_required = True
     
     for key, description in optional_keys.items():
         if os.getenv(key):
             env_status[key] = "✓ Configured"
         else:
             env_status[key] = f"⚠ Not configured - {description}"
-            missing_optional.append(key)
     
     status_html = "<h3>Environment Configuration</h3><ul>"
     for key, status in env_status.items():
         status_html += f"<li><strong>{key}:</strong> {status}</li>"
     status_html += "</ul>"
     
-    if missing_required:
+    if has_missing_required:
         status_html += "<p style='color: red;'><strong>⚠ Warning:</strong> Some required API keys are missing. Configure them in the HF Space settings.</p>"
     
     return status_html
@@ -315,7 +310,13 @@ def main():
     # Wait for FastAPI to be ready
     if not wait_for_fastapi_ready(max_wait=60):
         logger.error("FastAPI server failed to start. Check logs above.")
-        fastapi_process.kill()
+        fastapi_process.terminate()
+        try:
+            fastapi_process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            logger.warning("FastAPI process did not terminate gracefully, forcing kill")
+            fastapi_process.kill()
+            fastapi_process.wait()
         sys.exit(1)
     
     # Create and launch Gradio interface
