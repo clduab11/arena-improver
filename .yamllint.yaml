@@ -23,7 +23,6 @@ ignore: |
   build/
   dist/
   node_modules/
-  .github/
 
 rules:
   # Line length

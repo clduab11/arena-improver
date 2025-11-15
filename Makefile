@@ -107,6 +107,10 @@ test-fast: ## Run tests in parallel
 test-watch: ## Run tests in watch mode
 	ptw -- -v
 
+.PHONY: test-workflows
+test-workflows: ## Run workflow YAML validation tests
+	pytest tests/unit/test_workflow_yaml.py -v --noconftest
+
 # ----------------------------------------------------------------------------
 # Pre-commit
 # ----------------------------------------------------------------------------
@@ -223,7 +227,7 @@ shell: ## Start IPython shell
 	ipython
 
 .PHONY: check
-check: lint type-check test ## Run all checks (lint, type-check, test)
+check: lint type-check test test-workflows ## Run all checks (lint, type-check, test, workflow validation)
 
 .PHONY: ci
 ci: check security ## Run CI pipeline locally
