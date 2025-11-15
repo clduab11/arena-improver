@@ -12,7 +12,7 @@
 
 Listen up. I'm **Vawlrathh, The Small'n**—a pint-sized, sharp-tongued version of Volrath, The Fallen. Despite my stature, I know MTG Arena better than you know your own deck (which, frankly, isn't saying much).
 
-**Arena Improver** is an MCP-powered deck analysis tool that actually works. It analyzes your janky brews, tells you what's wrong (plenty), and helps you build something that won't embarrass you at FNM.
+I'm an MCP-powered deck analysis tool that actually works. I analyze your janky brews, tells you what's wrong (plenty), and help you build something that won't embarrass you at FNM.
 
 Designed for **Steam Arena players** who want to win games, not just collect pretty digital cards.
 
@@ -402,6 +402,10 @@ Want to improve this? Fine. Here's how:
 6. Push: `git push origin feature/YourFeature`
 7. Open a Pull Request
 
+### Automated PR Reviews (Claude)
+
+Need an automated once-over before pinging humans? Add the `claude-review` label to your PR and the Claude workflow will spin up exactly one review per commit. The workflow uses concurrency guards and duplicate detection, so you will not get stacks of identical GitHub Action runs cluttering the Checks tab. Want a fresh pass after changes? Remove the label (or re-apply it) and push a new commit—the workflow will recognize the new head SHA and post a single consolidated review comment tagged with that SHA.
+
 ### What I Want
 
 - Meta intelligence improvements
@@ -438,9 +442,11 @@ Want to improve this? Fine. Here's how:
 ### Metrics
 
 Run `examples/hackathon_demo.py` to generate:
+
 - Event logs (`data/events/hackathon_demo_export.json`)
 - Performance statistics
 - Feature demonstrations
+
 
 ---
 
