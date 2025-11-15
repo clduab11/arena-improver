@@ -404,7 +404,7 @@ Want to improve this? Fine. Here's how:
 
 ### Automated PR Reviews (Claude)
 
-Need an automated once-over before pinging humans? Add the `claude-review` label to your PR and the Claude workflow will spin up exactly one review per commit. The workflow uses concurrency guards and duplicate detection, so you will not get stacks of identical GitHub Action runs cluttering the Checks tab. Want a fresh pass after changes? Remove the label (or re-apply it) and push a new commit—the workflow will recognize the new head SHA and post a single consolidated review comment tagged with that SHA.
+Need an automated once-over before pinging humans? Add the `claude-review` label to your PR and the Claude workflow will spin up exactly one review per commit. The workflow uses concurrency guards (one active run per PR via `concurrency.group`) and duplicate detection (scans existing comments for `<!-- claude-review:{SHA} -->` tags), so you will not get stacks of identical GitHub Action runs cluttering the Checks tab or redundant comment spam. Want a fresh pass after changes? Remove the label (or re-apply it) and push a new commit—the workflow will recognize the new head SHA and post a single consolidated review comment tagged with that SHA. Only one review per SHA is ever posted.
 
 ### What I Want
 

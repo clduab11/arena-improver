@@ -39,7 +39,21 @@
 - [x] `ANTHROPIC_API_KEY` - For Claude PR/issue review workflows
 - [ ] `GITHUB_TOKEN` - Auto-injected by GitHub Actions (no manual setup needed)
 
-> **Workflow Behavior**: Apply the `claude-review` label to any PR that needs an automated Claude pass. The `claude-pr-review.yml` workflow deduplicates runs per head commit (concurrency guard + duplicate comment check), so you will only see one GitHub Action per commit. Remove and re-add the label or push a new commit to request another review.
+### Claude PR Review Workflow Behavior
+
+**Concurrency Control**: The workflow uses GitHub Actions concurrency groups (`concurrency.group: claude-pr-review-${{ github.event.pull_request.number || github.run_id }}`), ensuring only one workflow run is active per PR at any time. The `|| github.run_id` fallback ensures the workflow can run in edge cases where the PR number is not available. If you trigger a new run while one is in progress, the old run is canceled automatically via `cancel-in-progress: true`.
+
+**Duplicate Detection**: Before executing the review, the workflow scans existing PR comments for the marker `<!-- claude-review:{headSHA} -->`. If a comment with the current head SHA already exists (posted by `github-actions[bot]`), the workflow skips all subsequent steps. This prevents redundant reviews when the workflow is re-triggered for the same commit.
+
+**Skip Logic**: When a duplicate is detected, the workflow logs "Claude already reviewed this commit. Skipping duplicate run." and exits early. No API calls are made, no review is posted, and the workflow completes successfully with minimal resource usage.
+
+**Cost Savings**: This mechanism prevents unnecessary Anthropic API charges by ensuring each commit SHA is reviewed exactly once, even if the workflow is triggered multiple times (e.g., via label removal/re-application, workflow re-runs, or synchronize events on the same commit).
+
+**Label Trigger**: The workflow only runs when the `claude-review` label is present on the PR. Apply it to request a review; remove it to prevent future automatic reviews. Combined with the duplicate guard, this gives you precise control over when reviews occur.
+
+**Troubleshooting**: If you're not seeing a review, check: (1) Is the `claude-review` label applied? (2) Did a previous run already post a review for this SHA? (3) Check the Actions tab for workflow logs. (4) Verify `ANTHROPIC_API_KEY` is set correctly in repository secrets.
+
+**Validation**: See `tests/unit/test_workflow_yaml.py` for automated tests verifying the duplicate guard structure, concurrency configuration, and YAML parsing of all workflow files.
 
 ---
 

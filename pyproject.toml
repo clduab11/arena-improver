@@ -39,3 +39,7 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = [
+    "unit: Unit tests that don't require integration dependencies",
+    "integration: Integration tests that require external services"
+]
