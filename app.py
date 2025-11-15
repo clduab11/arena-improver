@@ -14,8 +14,9 @@ import logging
 import json
 import uuid
 import asyncio
+import html
 from datetime import datetime
-from typing import Optional, Dict, List, Tuple, Any
+from typing import Optional, Dict, List, Any
 
 import gradio as gr
 import httpx
@@ -26,17 +27,28 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Configuration
-FASTAPI_PORT = 7860
-GRADIO_PORT = 7861
-API_BASE_URL = f"http://localhost:{FASTAPI_PORT}/api/v1"
-HEALTH_CHECK_URL = f"http://localhost:{FASTAPI_PORT}/health"
-WS_BASE_URL = f"ws://localhost:{FASTAPI_PORT}/api/v1"
+FASTAPI_PORT = int(os.getenv("FASTAPI_PORT", "7860"))
+GRADIO_PORT = int(os.getenv("GRADIO_PORT", "7861"))
+API_BASE_URL = os.getenv("API_BASE_URL", f"http://localhost:{FASTAPI_PORT}/api/v1")
+HEALTH_CHECK_URL = os.getenv("HEALTH_CHECK_URL", f"http://localhost:{FASTAPI_PORT}/health")
+WS_BASE_URL = os.getenv("WS_BASE_URL", f"ws://localhost:{FASTAPI_PORT}/api/v1")
+
+# Constants
+EXPECTED_WIN_RATE_IMPROVEMENT = 0.06
+MAX_FILE_SIZE_MB = 1
+FILE_SIZE_LIMIT = MAX_FILE_SIZE_MB * 1024 * 1024  # 1MB in bytes
 
 # Session state keys
 SESSION_USER_ID = "user_id"
 SESSION_DECK_ID = "deck_id"
 SESSION_CHAT_HISTORY = "chat_history"
 SESSION_MCP_LOGS = "mcp_logs"
+
+# Global HTTP client with connection pooling
+api_client = httpx.AsyncClient(
+    timeout=60.0,
+    limits=httpx.Limits(max_connections=100, max_keepalive_connections=20)
+)
 
 # Vawlrathh's Personality CSS Theme
 CUSTOM_CSS = """
@@ -275,7 +287,7 @@ def start_fastapi_server():
         logger.info(f"FastAPI started (PID {process.pid})")
         return process
     except Exception as e:
-        logger.error(f"Failed to start FastAPI: {e}")
+        logger.exception(f"Failed to start FastAPI: {e}")
         raise
 
 
@@ -391,7 +403,7 @@ async def api_list_decks() -> List[Dict[str, Any]]:
             response.raise_for_status()
             return response.json()
     except Exception as e:
-        logger.error(f"Failed to list decks: {e}")
+        logger.exception(f"Failed to list decks: {e}")
         return []
 
 
@@ -426,7 +438,7 @@ async def send_chat_message(user_id: str, message: str, deck_id: Optional[int] =
             "consensus_checked": False
         }
     except Exception as e:
-        logger.error(f"WebSocket error: {e}")
+        logger.exception(f"WebSocket error: {e}")
         return {
             "type": "error",
             "response": f"Connection failed: {str(e)}",
@@ -439,7 +451,19 @@ async def send_chat_message(user_id: str, message: str, deck_id: Optional[int] =
 # ============================================================================
 
 def format_chat_message(role: str, content: str, consensus_data: Optional[Dict] = None) -> str:
-    """Format chat message with styling."""
+    """Format chat message with styling.
+    
+    Args:
+        role: Message role ('vawlrathh' or 'user')
+        content: Message content (will be HTML-escaped)
+        consensus_data: Optional consensus check data
+        
+    Returns:
+        HTML-formatted message string with escaped content
+    """
+    # Escape content to prevent XSS
+    escaped_content = html.escape(content)
+    
     if role == "vawlrathh":
         consensus_badge = ""
         if consensus_data:
@@ -450,20 +474,30 @@ def format_chat_message(role: str, content: str, consensus_data: Optional[Dict] 
 
         return f"""
         <div class="chat-message-vawlrathh">
-            <strong>🔥 Vawlrathh:</strong> {content}
+            <strong>🔥 Vawlrathh:</strong> {escaped_content}
             {f'<br/><small>{consensus_badge}</small>' if consensus_badge else ''}
         </div>
         """
     else:
         return f"""
         <div class="chat-message-user">
-            <strong>You:</strong> {content}
+            <strong>You:</strong> {escaped_content}
         </div>
         """
 
 
 def handle_chat_submit(message: str, chat_history: List, user_id: str, deck_id: Optional[int]):
-    """Handle chat message submission."""
+    """Handle chat message submission.
+    
+    Args:
+        message: User message text
+        chat_history: List of (role, content, consensus_data) tuples
+        user_id: User ID for WebSocket connection
+        deck_id: Optional deck ID for context
+        
+    Returns:
+        Tuple of (updated_chat_history, empty_string_for_input_clear)
+    """
     if not message.strip():
         return chat_history, ""
 
@@ -472,10 +506,7 @@ def handle_chat_submit(message: str, chat_history: List, user_id: str, deck_id: 
 
     # Send to API and get response
     try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        response = loop.run_until_complete(send_chat_message(user_id, message, deck_id))
-        loop.close()
+        response = asyncio.run(send_chat_message(user_id, message, deck_id))
 
         vawlrathh_response = response.get("response", "Something went wrong.")
         consensus_data = {
@@ -486,10 +517,56 @@ def handle_chat_submit(message: str, chat_history: List, user_id: str, deck_id: 
         chat_history.append(("vawlrathh", vawlrathh_response, consensus_data))
 
     except Exception as e:
-        logger.error(f"Chat error: {e}")
+        logger.exception(f"Chat error: {e}")
         chat_history.append(("vawlrathh", f"Error: {str(e)}", None))
 
     return chat_history, ""
+
+
+def validate_file_upload(file) -> tuple[bool, str]:
+    """Validate uploaded file for security.
+    
+    Args:
+        file: Gradio file object
+        
+    Returns:
+        Tuple of (is_valid, error_message)
+    """
+    if file is None:
+        return False, "No file provided"
+    
+    # Check file size
+    try:
+        file_size = os.path.getsize(file.name)
+        if file_size > FILE_SIZE_LIMIT:
+            return False, f"File too large. Maximum size is {MAX_FILE_SIZE_MB}MB"
+    except Exception as e:
+        return False, f"Could not check file size: {str(e)}"
+    
+    # Check file extension
+    if not file.name.lower().endswith('.csv'):
+        return False, "Only CSV files are allowed"
+    
+    return True, ""
+
+
+def validate_deck_text(deck_text: str) -> tuple[bool, str]:
+    """Validate deck text input.
+    
+    Args:
+        deck_text: Deck text from user
+        
+    Returns:
+        Tuple of (is_valid, error_message)
+    """
+    if not deck_text or not deck_text.strip():
+        return False, "Deck text is empty"
+    
+    # Check length (prevent extremely large inputs)
+    if len(deck_text) > 50000:  # ~50KB text limit
+        return False, "Deck text is too long"
+    
+    return True, ""
 
 
 def render_chat_history(chat_history: List) -> str:
@@ -505,17 +582,27 @@ def render_chat_history(chat_history: List) -> str:
 
 
 def handle_csv_upload(file, progress=gr.Progress()):
-    """Handle CSV deck upload."""
+    """Handle CSV deck upload.
+    
+    Args:
+        file: Uploaded CSV file
+        progress: Gradio progress indicator
+        
+    Returns:
+        Tuple of (message, deck_id, deck_id_for_state)
+    """
     if file is None:
         return "❌ Your CSV is as broken as your mana curve.", None, None
+
+    # Validate file
+    is_valid, error_msg = validate_file_upload(file)
+    if not is_valid:
+        return f"❌ {error_msg}", None, None
 
     progress(0.2, desc="Uploading deck...")
 
     try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        result = loop.run_until_complete(api_upload_csv(file))
-        loop.close()
+        result = asyncio.run(api_upload_csv(file))
 
         if "error" in result:
             return f"❌ {result['error']}", None, None
@@ -528,21 +615,29 @@ def handle_csv_upload(file, progress=gr.Progress()):
         return f"✅ {message}\n\n**Deck ID:** #{deck_id}", deck_id, deck_id
 
     except Exception as e:
+        logger.exception(f"CSV upload failed: {e}")
         return f"❌ Upload failed: {str(e)}", None, None
 
 
 def handle_text_upload(deck_text, progress=gr.Progress()):
-    """Handle text deck upload."""
-    if not deck_text.strip():
-        return "❌ That's not a deck, that's a pile. Try again.", None, None
+    """Handle text deck upload.
+    
+    Args:
+        deck_text: Deck text in Arena format
+        progress: Gradio progress indicator
+        
+    Returns:
+        Tuple of (message, deck_id, deck_id_for_state)
+    """
+    # Validate input
+    is_valid, error_msg = validate_deck_text(deck_text)
+    if not is_valid:
+        return f"❌ {error_msg}", None, None
 
     progress(0.2, desc="Parsing deck...")
 
     try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        result = loop.run_until_complete(api_upload_text(deck_text))
-        loop.close()
+        result = asyncio.run(api_upload_text(deck_text))
 
         if "error" in result:
             return f"❌ {result['error']}", None, None
@@ -555,21 +650,27 @@ def handle_text_upload(deck_text, progress=gr.Progress()):
         return f"✅ {message}\n\n**Deck ID:** #{deck_id}", deck_id, deck_id
 
     except Exception as e:
+        logger.exception(f"Text upload failed: {e}")
         return f"❌ Upload failed: {str(e)}", None, None
 
 
 def handle_analyze_deck(deck_id, progress=gr.Progress()):
-    """Handle deck analysis."""
+    """Handle deck analysis.
+    
+    Args:
+        deck_id: ID of deck to analyze
+        progress: Gradio progress indicator
+        
+    Returns:
+        Tuple of (analysis_output, mana_curve_data, purchase_info)
+    """
     if deck_id is None:
         return "❌ Upload a deck first, genius.", None, None
 
     progress(0.3, desc="Calculating how many games you'll lose...")
 
     try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        result = loop.run_until_complete(api_analyze_deck(deck_id))
-        loop.close()
+        result = asyncio.run(api_analyze_deck(deck_id))
 
         if "error" in result:
             return f"❌ {result['error']}", None, None
@@ -600,6 +701,7 @@ def handle_analyze_deck(deck_id, progress=gr.Progress()):
         return output, analysis.get('mana_curve'), analysis.get('purchase_info')
 
     except Exception as e:
+        logger.exception(f"Analysis failed: {e}")
         return f"❌ Analysis failed: {str(e)}", None, None
 
 
@@ -797,16 +899,14 @@ def create_gradio_interface():
                 predicted_wr = gr.Markdown("### Predicted Win Rate\nOptimize to see predicted improvement.")
 
                 def handle_optimize(deck_id, progress=gr.Progress()):
+                    """Handle deck optimization request."""
                     if deck_id is None:
                         return "❌ Upload a deck first.", None, None, "### Predicted Win Rate\nNo deck to optimize."
 
                     progress(0.3, desc="Finding ways to fix your deck...")
 
                     try:
-                        loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(loop)
-                        result = loop.run_until_complete(api_optimize_deck(deck_id))
-                        loop.close()
+                        result = asyncio.run(api_optimize_deck(deck_id))
 
                         if "error" in result:
                             return f"❌ {result['error']}", None, None, "### Predicted Win Rate\nOptimization failed."
@@ -836,10 +936,13 @@ Based on my analysis, here's how to make this deck less embarrassing:
 - **Confidence:** {confidence*100:.1f}%
 """
 
+                        # Calculate improvement using constant
+                        current_win_rate = predicted_win_rate - EXPECTED_WIN_RATE_IMPROVEMENT
+                        improvement = predicted_win_rate - current_win_rate
                         wr_display = f"""### Predicted Win Rate
-**Current:** ~{(predicted_win_rate - 0.06)*100:.1f}%
+**Current:** ~{current_win_rate*100:.1f}%
 **After Optimization:** ~{predicted_win_rate*100:.1f}%
-**Improvement:** +{6.0:.1f}% ✨
+**Improvement:** +{improvement*100:.1f}% ✨
 
 *Not bad. You might actually win a game.*
 """
@@ -848,6 +951,7 @@ Based on my analysis, here's how to make this deck less embarrassing:
                                pd.DataFrame(cuts, columns=["Card Name", "Quantity", "Reason"]) if cuts else None, wr_display
 
                     except Exception as e:
+                        logger.exception(f"Optimization failed: {e}")
                         return f"❌ Optimization failed: {str(e)}", None, None, "### Predicted Win Rate\nError occurred."
 
                 optimize_btn.click(
@@ -890,10 +994,7 @@ Based on my analysis, here's how to make this deck less embarrassing:
                     progress(0.3, desc="Looking up card prices...")
 
                     try:
-                        loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(loop)
-                        result = loop.run_until_complete(api_get_purchase_info(deck_id))
-                        loop.close()
+                        result = asyncio.run(api_get_purchase_info(deck_id))
 
                         if "error" in result:
                             return f"❌ {result['error']}", None, None, ""
@@ -955,6 +1056,7 @@ The following cards only exist in Arena and can't be purchased:
                                warning
 
                     except Exception as e:
+                        logger.exception(f"Purchase lookup failed: {e}")
                         return f"❌ Purchase lookup failed: {str(e)}", None, None, ""
 
                 purchase_btn.click(
@@ -1063,7 +1165,31 @@ The following cards only exist in Arena and can't be purchased:
 
                 demo_log = gr.HTML("")
 
+                async def run_demo_async(demo_deck_text):
+                    """Run all demo operations asynchronously."""
+                    results = {}
+                    
+                    # Upload deck
+                    upload_result = await api_upload_text(demo_deck_text)
+                    if "error" in upload_result:
+                        results["error"] = f"Upload failed: {upload_result['error']}"
+                        return results
+                    
+                    results["deck_id"] = upload_result.get("deck_id")
+                    
+                    # Analyze
+                    await api_analyze_deck(results["deck_id"])
+                    
+                    # Optimize
+                    await api_optimize_deck(results["deck_id"])
+                    
+                    # Purchase info
+                    await api_get_purchase_info(results["deck_id"])
+                    
+                    return results
+
                 def run_demo(progress=gr.Progress()):
+                    """Run demo workflow with pre-loaded deck."""
                     progress(0.1, desc="Loading demo deck...")
 
                     demo_deck_text = """4 Lightning Bolt (M11) 146
@@ -1082,50 +1208,29 @@ The following cards only exist in Arena and can't be purchased:
                     log = "<div style='font-family: monospace; font-size: 0.9em;'>"
 
                     try:
-                        # Upload deck
                         progress(0.3, desc="Uploading Mono Red Aggro...")
-                        loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(loop)
-                        upload_result = loop.run_until_complete(api_upload_text(demo_deck_text))
-                        loop.close()
+                        
+                        # Run all operations in a single async call
+                        results = asyncio.run(run_demo_async(demo_deck_text))
+                        
+                        if "error" in results:
+                            log += f"<p style='color: var(--accent-red);'>❌ {results['error']}</p></div>"
+                            return f"❌ Demo failed: {results['error']}", log
 
-                        if "error" in upload_result:
-                            log += f"<p style='color: var(--accent-red);'>❌ Upload failed: {upload_result['error']}</p></div>"
-                            return "❌ Demo failed at upload step.", log
-
-                        deck_id = upload_result.get("deck_id")
+                        deck_id = results.get("deck_id")
                         log += f"<p style='color: var(--success-green);'>✓ Uploaded Mono Red Aggro (Deck ID: #{deck_id})</p>"
 
-                        # Analyze
                         progress(0.5, desc="Analyzing deck...")
-                        loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(loop)
-                        analysis_result = loop.run_until_complete(api_analyze_deck(deck_id))
-                        loop.close()
+                        log += "<p style='color: var(--success-green);'>✓ Analysis complete</p>"
 
-                        log += f"<p style='color: var(--success-green);'>✓ Analysis complete</p>"
-
-                        # Optimize
                         progress(0.7, desc="Getting optimization suggestions...")
-                        loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(loop)
-                        optimize_result = loop.run_until_complete(api_optimize_deck(deck_id))
-                        loop.close()
+                        log += "<p style='color: var(--success-green);'>✓ Optimization suggestions generated</p>"
 
-                        log += f"<p style='color: var(--success-green);'>✓ Optimization suggestions generated</p>"
-
-                        # Purchase info
                         progress(0.9, desc="Looking up card prices...")
-                        loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(loop)
-                        purchase_result = loop.run_until_complete(api_get_purchase_info(deck_id))
-                        loop.close()
+                        log += "<p style='color: var(--success-green);'>✓ Purchase info retrieved</p>"
 
-                        log += f"<p style='color: var(--success-green);'>✓ Purchase info retrieved</p>"
-
-                        # Chat
                         progress(1.0, desc="Demo complete!")
-                        log += f"<p style='color: var(--success-green);'>✓ Demo deck ready for chat</p>"
+                        log += "<p style='color: var(--success-green);'>✓ Demo deck ready for chat</p>"
                         log += "</div>"
 
                         summary = f"""# 🎬 Demo Complete!
@@ -1144,6 +1249,7 @@ The following cards only exist in Arena and can't be purchased:
                         return summary, log
 
                     except Exception as e:
+                        logger.exception(f"Demo failed: {e}")
                         log += f"<p style='color: var(--accent-red);'>❌ Error: {str(e)}</p></div>"
                         return f"❌ Demo failed: {str(e)}", log
 
