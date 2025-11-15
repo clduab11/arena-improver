@@ -1,31 +1,56 @@
-name: Sync to Hugging Face Space
+name: Upload to HF Space
 
 on:
   push:
     branches: [main]
-  workflow_dispatch:  # Allows manual trigger
+  workflow_dispatch:
 
 jobs:
-  sync-to-hf:
+  upload-to-hf:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          fetch-depth: 0
-          lfs: true
-      
-      - name: Validate HF Token
-        run: |
-          if [ -z "${{ secrets.HF_TOKEN }}" ]; then
-            echo "Error: HF_TOKEN secret is not set"
-            exit 1
-          fi
-      
-      - name: Push to Hugging Face Space
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: pip install --upgrade huggingface_hub
+
+      - name: Upload to Hugging Face Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          git remote add hf https://huggingface.co/spaces/MCP-1st-Birthday/vawlrath
-          git push https://clduab11:${HF_TOKEN}@huggingface.co/spaces/MCP-1st-Birthday/vawlrath main --force 2>&1 | sed "s/${HF_TOKEN}/***TOKEN***/g"
+          python - <<'PY'
+          import os
+          import sys
+          from huggingface_hub import HfApi
+
+          token = os.environ.get("HF_TOKEN")
+          if not token:
+              sys.exit("HF_TOKEN secret is missing. Set it in the repository secrets before running this workflow.")
+
+          api = HfApi()
+          try:
+              api.upload_folder(
+                  folder_path=".",
+                  repo_id="MCP-1st-Birthday/vawlrath",
+                  repo_type="space",
+                  token=token,
+                  ignore_patterns=[
+                      ".git/*",
+                      ".github/*",
+                      "*.pyc",
+                      "__pycache__/*",
+                      ".gitignore",
+                      "hf-space/*",
+                  ],
+              )
+          except Exception as err:
+              sys.exit(f"Upload failed: {err}")
+          else:
+              print("Upload completed successfully.")
+          PY
