@@ -15,7 +15,7 @@ import json
 import uuid
 import asyncio
 import html
-from datetime import datetime
+from datetime import datetime  # noqa: F401 - used in f-string in refresh_metrics
 from typing import Optional, Dict, List, Any
 
 import gradio as gr
@@ -766,16 +766,18 @@ def create_gradio_interface():
 
                     with gr.Column(scale=1):
                         gr.Markdown("### Quick Info")
-                        current_deck_display = gr.Markdown("**Current Deck:** None\n\nUpload a deck to get started.")
+                        # UI component - displayed when created
+                        current_deck_display = gr.Markdown("**Current Deck:** None\n\nUpload a deck to get started.")  # noqa: F841
 
                         gr.Markdown("### MCP Tools Status")
+                        # UI component - displayed when created
                         mcp_status = gr.HTML("""
                         <div style="font-size: 0.9em;">
                             <p><span class="mcp-indicator mcp-active"></span> Chat Active</p>
                             <p><span class="mcp-indicator mcp-idle"></span> Analysis Ready</p>
                             <p><span class="mcp-indicator mcp-idle"></span> Memory Connected</p>
                         </div>
-                        """)
+                        """)  # noqa: F841
 
                 # Chat handlers
                 def update_chat_display(message, history, user_id, deck_id):
@@ -1282,7 +1284,8 @@ The following cards only exist in Arena and can't be purchased:
                 """)
 
                 with gr.Row():
-                    mcp_tools_chart = gr.BarPlot(
+                    # UI component - will be used for future metrics
+                    mcp_tools_chart = gr.BarPlot(  # noqa: F841
                         x="tool",
                         y="count",
                         title="MCP Tools Usage",
