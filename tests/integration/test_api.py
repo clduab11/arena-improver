@@ -87,3 +87,16 @@ async def test_record_performance_not_found(initialized_app):
             }
         )
         assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_meta_snapshot(initialized_app):
+    """Test fetching meta intelligence snapshot."""
+    transport = ASGITransport(app=initialized_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/api/v1/meta/Standard")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["format"].lower() == "standard"
+        assert "archetypes" in data
+        assert isinstance(data["archetypes"], list)

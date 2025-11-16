@@ -1,14 +1,16 @@
 """FastAPI routes for deck analysis."""
 
+from dataclasses import asdict
 from typing import Optional
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from pydantic import BaseModel
 
-from ..models.deck import Deck, DeckAnalysis, OptimizedDeck, DeckSuggestion
+from ..models.deck import Deck, DeckAnalysis, DeckSuggestion
 from ..services.deck_analyzer import DeckAnalyzer
 from ..services.smart_sql import SmartSQLService
 from ..services.smart_inference import SmartInferenceService
 from ..services.smart_memory import SmartMemoryService
+from ..services.meta_intelligence import MetaIntelligenceService
 from ..services.embeddings import EmbeddingsService
 from ..services.scryfall_service import ScryfallService
 from ..services.card_market_service import CardMarketService
@@ -24,6 +26,7 @@ inference_service = SmartInferenceService()
 embeddings_service = EmbeddingsService()
 scryfall_service = ScryfallService()
 card_market_service = CardMarketService(scryfall_service)
+meta_service = MetaIntelligenceService()
 
 
 class DeckUploadRequest(BaseModel):
@@ -85,8 +88,11 @@ async def upload_deck_csv(file: UploadFile = File(...)):
             "message": f"Deck '{deck.name}' uploaded successfully"
         }
     
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Error parsing CSV: {str(e)}")
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Error parsing CSV: {exc}",
+        ) from exc
 
 
 @router.post("/upload/text", response_model=dict)
@@ -109,11 +115,14 @@ async def upload_deck_text(request: DeckUploadRequest):
         return {
             "status": "success",
             "deck_id": deck_id,
-            "message": f"Deck uploaded successfully"
+            "message": "Deck uploaded successfully",
         }
-    
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Error parsing deck: {str(e)}")
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Error parsing deck: {exc}",
+        ) from exc
 
 
 @router.get("/deck/{deck_id}", response_model=Deck)
@@ -170,7 +179,8 @@ async def optimize_deck(deck_id: int, include_purchase_info: bool = True):
     """
     Optimize a deck with AI-powered suggestions.
 
-    Returns analysis, suggestions, predicted win rate, and optional purchase info.
+    Returns analysis, suggestions, predicted win rate,
+    and optional purchase info.
     """
     # Get deck from database
     deck = await sql_service.get_deck(deck_id)
@@ -220,6 +230,23 @@ async def get_deck_stats(deck_id: int):
     }
 
 
+@router.get("/meta/{game_format}", response_model=dict)
+async def get_meta_snapshot(game_format: str = "Standard"):
+    """Expose meta intelligence snapshot for the Gradio dashboards."""
+
+    snapshot = await meta_service.get_current_meta(game_format)
+    return {
+        "format": snapshot.format,
+        "timestamp": snapshot.timestamp,
+        "archetypes": [asdict(arch) for arch in snapshot.archetypes],
+        "tournament_results": [
+            asdict(result) for result in snapshot.tournament_results
+        ],
+        "ban_list_updates": snapshot.ban_list_updates,
+        "meta_trends": snapshot.meta_trends,
+    }
+
+
 @router.post("/performance/{deck_id}", response_model=dict)
 async def record_performance(
     deck_id: int,
@@ -229,9 +256,10 @@ async def record_performance(
     # Validate result value
     valid_results = {"win", "loss", "draw"}
     if performance.result not in valid_results:
+        valid_list = ", ".join(sorted(valid_results))
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid result value. Must be one of: {', '.join(valid_results)}"
+            detail=f"Invalid result value. Must be one of: {valid_list}",
         )
     
     # Verify deck exists

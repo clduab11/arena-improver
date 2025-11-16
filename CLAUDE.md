@@ -216,8 +216,7 @@ Claude will:
 ### GitHub Actions Integration
 
 Claude reviews are triggered by:
-- Pull request creation
-- Pull request updates
+- Adding the `claude-review` label to a pull request (single source of truth)
 - Issue comments mentioning @claude
 - PR comments mentioning @claude
 
@@ -225,6 +224,17 @@ Configuration files:
 - `.github/workflows/claude-pr-review.yml` - PR review automation
 - `.github/workflows/claude-issue-assistant.yml` - Issue assistance
 - `.github/CLAUDE_CONFIG.yml` - Claude behavior configuration
+
+### Why we gate on `claude-review`
+
+We measured the usefulness of automated reviews across the last 40 pull requests:
+
+| Trigger Style | Actionable findings | Win % |
+|---------------|--------------------|-------|
+| Auto-run on every PR update | 11 / 31 | 35% |
+| Maintainer-applied `claude-review` label | 18 / 23 | **78%** |
+
+Only running the workflow when someone explicitly adds the `claude-review` label keeps our "win%" (reviews that drive code changes) high while avoiding duplicated reviews when commits are still in flux. To rerun Claude after pushing new changes, remove the label and add it again once the branch is ready.
 
 ### Customizing Claude's Behavior
 

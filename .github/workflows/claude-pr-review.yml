@@ -2,7 +2,8 @@ name: Claude PR Review
 
 on:
   pull_request_target:
-    types: [opened, synchronize, reopened, labeled]
+    types:
+      - labeled
 
 permissions:
   contents: read
@@ -19,10 +20,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     if: |
-      github.event_name == 'pull_request_target' && (
-        (github.event.action == 'labeled' && github.event.label.name == 'claude-review') ||
-        (github.event.action != 'labeled' && contains(github.event.pull_request.labels.*.name, 'claude-review'))
-      )
+      github.event_name == 'pull_request_target' &&
+      github.event.action == 'labeled' &&
+      github.event.label.name == 'claude-review'
 
     steps:
       - name: Checkout code

@@ -8,14 +8,22 @@ for deployment on Hugging Face Spaces. The FastAPI server runs on port 7860
 — Vawlrathh, The Small'n
 """
 
+# pylint: disable=no-member
+
+import json
 import os
 import subprocess
 import sys
 import time
+import uuid
 import logging
+import textwrap
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, List, Optional
 
 import gradio as gr
 import httpx
+import websockets
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -25,6 +33,336 @@ FASTAPI_PORT = 7860  # HF Spaces expect main app on 7860
 GRADIO_PORT = 7861   # Gradio interface on different port
 HEALTH_CHECK_URL = f"http://localhost:{FASTAPI_PORT}/health"
 DOCS_URL = f"/proxy/{FASTAPI_PORT}/docs"  # HF Space proxy pattern
+REPO_URL = "https://github.com/clduab11/arena-improver"
+HACKATHON_URL = "https://huggingface.co/MCP-1st-Birthday"
+HF_DEPLOYMENT_GUIDE_URL = (
+    f"{REPO_URL}/blob/main/docs/HF_DEPLOYMENT.md"
+)
+API_BASE_URL = os.getenv(
+    "FASTAPI_BASE_URL",
+    f"http://localhost:{FASTAPI_PORT}",
+)
+WS_BASE_URL = os.getenv(
+    "FASTAPI_WS_URL",
+    f"ws://localhost:{FASTAPI_PORT}",
+)
+
+
+@dataclass
+class BuilderMetadata:
+    """Lightweight descriptor for tab builders used by the tests."""
+
+    name: str
+    description: str
+    endpoints: List[str]
+    handler: Callable[..., Any]
+    websocket_path: Optional[str] = None
+
+
+GRADIO_BUILDERS: Dict[str, BuilderMetadata] = {}
+
+
+def builder_registry(
+    *,
+    name: str,
+    description: str,
+    endpoints: List[str],
+    websocket_path: Optional[str] = None,
+):
+    """Decorator used to register modular Gradio builders."""
+
+    def decorator(func: Callable[..., Any]):
+        GRADIO_BUILDERS[name] = BuilderMetadata(
+            name=name,
+            description=description,
+            endpoints=endpoints,
+            handler=func,
+            websocket_path=websocket_path,
+        )
+        return func
+
+    return decorator
+
+
+def _upload_csv_to_api(file_path: Optional[str]) -> Dict[str, Any]:
+    """Upload a CSV file to the FastAPI backend with defensive logging."""
+
+    if not file_path:
+        return {"status": "error", "message": "No CSV file selected"}
+
+    try:
+        with open(file_path, "rb") as file_handle:
+            files = {
+                "file": (os.path.basename(file_path), file_handle, "text/csv"),
+            }
+            response = httpx.post(
+                f"{API_BASE_URL}/api/v1/upload/csv",
+                files=files,
+                timeout=60,
+            )
+            response.raise_for_status()
+            return response.json()
+    except FileNotFoundError:
+        return {"status": "error", "message": "CSV file could not be read"}
+    except httpx.HTTPStatusError as exc:
+        logger.error("CSV upload failed: %s", exc)
+        status_code = exc.response.status_code
+        return {
+            "status": "error",
+            "message": (
+                "Backend rejected CSV upload "
+                f"({status_code})"
+            ),
+        }
+    except Exception as exc:  # pylint: disable=broad-except
+        logger.exception("Unexpected CSV upload failure")
+        return {"status": "error", "message": str(exc)}
+
+
+def _upload_text_to_api(deck_text: str, fmt: str) -> Dict[str, Any]:
+    """Upload Arena text export to the FastAPI backend."""
+
+    if not deck_text or not deck_text.strip():
+        return {"status": "error", "message": "Deck text is empty"}
+
+    payload = {"deck_string": deck_text, "format": fmt}
+    try:
+        response = httpx.post(
+            f"{API_BASE_URL}/api/v1/upload/text",
+            json=payload,
+            timeout=60,
+        )
+        response.raise_for_status()
+        return response.json()
+    except httpx.HTTPStatusError as exc:
+        logger.error("Text upload failed: %s", exc)
+        status_code = exc.response.status_code
+        return {
+            "status": "error",
+            "message": (
+                "Backend rejected text upload "
+                f"({status_code})"
+            ),
+        }
+    except Exception as exc:  # pylint: disable=broad-except
+        logger.exception("Unexpected text upload failure")
+        return {"status": "error", "message": str(exc)}
+
+
+def _fetch_meta_snapshot(game_format: str) -> Dict[str, Any]:
+    """Fetch meta intelligence for a specific format."""
+
+    try:
+        response = httpx.get(
+            f"{API_BASE_URL}/api/v1/meta/{game_format}",
+            timeout=60,
+        )
+        response.raise_for_status()
+        return response.json()
+    except httpx.HTTPStatusError as exc:
+        logger.error("Meta snapshot failed: %s", exc)
+        return {
+            "status": "error",
+            "message": f"Meta endpoint error ({exc.response.status_code})",
+        }
+    except Exception as exc:  # pylint: disable=broad-except
+        logger.exception("Meta snapshot unexpected failure")
+        return {"status": "error", "message": str(exc)}
+
+
+def _fetch_memory_summary(deck_id: Optional[float]) -> Dict[str, Any]:
+    """Fetch Smart Memory stats for the supplied deck id."""
+
+    if not deck_id:
+        return {"status": "error", "message": "Deck ID required"}
+
+    try:
+        response = httpx.get(
+            f"{API_BASE_URL}/api/v1/stats/{int(deck_id)}",
+            timeout=60,
+        )
+        response.raise_for_status()
+        return response.json()
+    except httpx.HTTPStatusError as exc:
+        logger.error("Memory summary failed: %s", exc)
+        return {
+            "status": "error",
+            "message": f"Stats endpoint error ({exc.response.status_code})",
+        }
+    except Exception as exc:  # pylint: disable=broad-except
+        logger.exception("Memory summary unexpected failure")
+        return {"status": "error", "message": str(exc)}
+
+
+async def _check_chat_websocket() -> Dict[str, Any]:
+    """Attempt to connect to the chat WebSocket to validate connectivity."""
+
+    ws_url = f"{WS_BASE_URL}/api/v1/ws/chat/{uuid.uuid4()}"
+    try:
+        async with websockets.connect(ws_url, open_timeout=10) as connection:
+            await connection.send(json.dumps({"type": "ping"}))
+            await connection.recv()
+        return {"status": "connected", "endpoint": ws_url}
+    except Exception as exc:  # pylint: disable=broad-except
+        logger.error("WebSocket connection failed: %s", exc)
+        return {"status": "error", "message": str(exc), "endpoint": ws_url}
+
+
+@builder_registry(
+    name="deck_uploader",
+    description="Deck CSV and text imports",
+    endpoints=["/api/v1/upload/csv", "/api/v1/upload/text"],
+)
+def build_deck_uploader_tab():
+    """Deck uploader for Gradio 6 that posts to FastAPI endpoints."""
+
+    gr.Markdown("## Deck Uploads")
+    deck_id_state = gr.State(value=None)
+    deck_id_box = gr.Number(label="Latest Deck ID", interactive=False)
+    upload_status = gr.JSON(label="Upload Response", value={})
+
+    with gr.Row():
+        csv_input = gr.File(file_types=[".csv"], label="Arena CSV Export")
+        upload_btn = gr.Button("Upload CSV", variant="primary")
+
+    def handle_csv_upload(uploaded_file, previous_id):
+        file_path = getattr(uploaded_file, "name", None)
+        payload = _upload_csv_to_api(file_path)
+        deck_id = payload.get("deck_id") or previous_id
+        return payload, deck_id, deck_id
+
+    upload_btn.click(  # pylint: disable=no-member
+        fn=handle_csv_upload,
+        inputs=[csv_input, deck_id_state],
+        outputs=[upload_status, deck_id_state, deck_id_box],
+    )
+
+    gr.Markdown("### Arena Text Export")
+    deck_text_input = gr.Textbox(
+        lines=10,
+        label="Arena Export",  # guidance label
+        placeholder="4 Lightning Bolt (M11) 146\n2 Counterspell (MH2) 267",
+    )
+    format_dropdown = gr.Dropdown(
+        choices=["Standard", "Pioneer", "Modern"],
+        value="Standard",
+        label="Format",
+    )
+    text_upload_btn = gr.Button("Upload Text", variant="secondary")
+
+    def handle_text_upload(deck_text, fmt, previous_id):
+        payload = _upload_text_to_api(deck_text, fmt)
+        deck_id = payload.get("deck_id") or previous_id
+        return payload, deck_id, deck_id
+
+    text_upload_btn.click(  # pylint: disable=no-member
+        fn=handle_text_upload,
+        inputs=[deck_text_input, format_dropdown, deck_id_state],
+        outputs=[upload_status, deck_id_state, deck_id_box],
+    )
+
+    gr.Markdown("### Tips")
+    tips_markdown = (
+        "* CSV uploads should come from the Steam Arena export.\n"
+        "* Text uploads should be the Arena clipboard format.\n"
+        "* The latest `deck_id` works across the Meta dashboard and chat tabs."
+    )
+    gr.Markdown(tips_markdown)
+
+
+@builder_registry(
+    name="chat_ui",
+    description="WebSocket chat surface",
+    endpoints=["/api/v1/ws/chat/{user_id}"],
+    websocket_path="/api/v1/ws/chat/{user_id}",
+)
+def build_chat_ui_tab():
+    """WebSocket chat interface hooking into FastAPI chat endpoint."""
+
+    gr.Markdown("## Chat with Vawlrathh")
+    connection_status = gr.JSON(label="WebSocket Status", value={})
+    chatbot = gr.Chatbot(label="Live Conversation")
+    chat_history_state = gr.State(value=[])
+    message_box = gr.Textbox(
+        label="Message",
+        lines=2,
+        placeholder="Ask Vawlrathh how to fix your deck…",
+    )
+    deck_context = gr.Number(label="Deck ID (optional)", precision=0)
+
+    connect_btn = gr.Button("Test WebSocket", variant="primary")
+    send_btn = gr.Button("Add Message Locally", variant="secondary")
+
+    connect_btn.click(  # pylint: disable=no-member
+        fn=_check_chat_websocket,
+        outputs=connection_status,
+    )
+
+    def queue_message(history, message, deck_id):
+        history = history or []
+        if not message or not message.strip():
+            return history, "", history
+
+        context_note = (
+            f"Deck context: {int(deck_id)}"
+            if deck_id
+            else "No deck context provided"
+        )
+        summary = (
+            "Message enqueued for WebSocket delivery."
+            f" {context_note}"
+        )
+        # Chatbot expects (user, assistant) tuples
+        history.append((message.strip(), summary))
+        return history, "", history
+
+    send_btn.click(  # pylint: disable=no-member
+        fn=queue_message,
+        inputs=[chat_history_state, message_box, deck_context],
+        outputs=[chatbot, message_box, chat_history_state],
+    )
+
+    gr.Markdown(
+        "Use the **Test WebSocket** button to ensure the backend connection "
+        "works before sending."
+    )
+
+
+@builder_registry(
+    name="meta_dashboards",
+    description="Meta + memory analytics",
+    endpoints=["/api/v1/meta/{format}", "/api/v1/stats/{deck_id}"],
+)
+def build_meta_dashboard_tab():
+    """Meta dashboards for SmartMemory + MetaIntelligence data."""
+
+    gr.Markdown("## Meta Dashboards")
+    format_dropdown = gr.Dropdown(
+        choices=["Standard", "Pioneer", "Modern"],
+        value="Standard",
+        label="Format",
+    )
+    meta_btn = gr.Button("Load Meta Snapshot", variant="primary")
+    meta_json = gr.JSON(label="Meta Intelligence", value={})
+    meta_btn.click(  # pylint: disable=no-member
+        fn=_fetch_meta_snapshot,
+        inputs=format_dropdown,
+        outputs=meta_json,
+    )
+
+    deck_input = gr.Number(label="Deck ID", precision=0)
+    memory_btn = gr.Button("Load Smart Memory", variant="secondary")
+    memory_json = gr.JSON(label="Memory Summary", value={})
+    memory_btn.click(  # pylint: disable=no-member
+        fn=_fetch_memory_summary,
+        inputs=deck_input,
+        outputs=memory_json,
+    )
+
+    gr.Markdown(
+        "Meta snapshots surface win-rates, while Smart Memory summarizes "
+        "past conversations."
+    )
 
 
 def kill_existing_uvicorn():
@@ -35,20 +373,24 @@ def kill_existing_uvicorn():
         result = subprocess.run(
             ["pkill", "-9", "-f", f"uvicorn.*{FASTAPI_PORT}"],
             capture_output=True,
-            text=True
+            text=True,
+            check=False,
         )
         if result.returncode == 0:
-            logger.info(f"Killed existing uvicorn processes on port {FASTAPI_PORT}")
+            logger.info(
+                "Killed existing uvicorn processes on port %s",
+                FASTAPI_PORT,
+            )
         time.sleep(1)  # Give processes time to clean up
-    except Exception as e:
-        logger.warning(f"Error killing uvicorn processes: {e}")
+    except (OSError, subprocess.SubprocessError) as exc:
+        logger.warning("Error killing uvicorn processes: %s", exc)
 
 
 def start_fastapi_server():
     """Start the FastAPI server in the background."""
     kill_existing_uvicorn()
     
-    logger.info(f"Starting FastAPI server on port {FASTAPI_PORT}...")
+    logger.info("Starting FastAPI server on port %s...", FASTAPI_PORT)
     
     try:
         # Start uvicorn as a subprocess
@@ -58,16 +400,16 @@ def start_fastapi_server():
                 "src.main:app",
                 "--host", "0.0.0.0",
                 "--port", str(FASTAPI_PORT),
-                "--log-level", "info"
+                "--log-level", "info",
             ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL
         )
-        
-        logger.info(f"FastAPI server started with PID {process.pid}")
+
+        logger.info("FastAPI server started with PID %s", process.pid)
         return process
-    except Exception as e:
-        logger.error(f"Failed to start FastAPI server: {e}")
+    except (OSError, subprocess.SubprocessError) as exc:
+        logger.error("Failed to start FastAPI server: %s", exc)
         raise
 
 
@@ -91,26 +433,39 @@ def wait_for_fastapi_ready(max_wait=60, check_interval=2):
                 logger.info("FastAPI server is ready!")
                 return True
         except (httpx.ConnectError, httpx.TimeoutException):
-            logger.info(f"Server not ready yet, waiting {check_interval}s...")
+            logger.info(
+                "Server not ready yet, waiting %s seconds...",
+                check_interval,
+            )
             time.sleep(check_interval)
-        except Exception as e:
-            logger.warning(f"Health check error: {e}")
+        except httpx.HTTPError as exc:
+            logger.warning("Health check error: %s", exc)
             time.sleep(check_interval)
     
-    logger.error(f"FastAPI server did not become ready within {max_wait}s")
+    logger.error(
+        "FastAPI server did not become ready within %s seconds",
+        max_wait,
+    )
     return False
 
 
 def check_environment():
-    """Check if required environment variables are set and provide helpful feedback."""
+    """Check required environment variables and return HTML summary."""
     env_status = {}
     required_keys = {
         "OPENAI_API_KEY": "Required for AI-powered deck analysis and chat",
         "ANTHROPIC_API_KEY": "Required for consensus checking",
     }
     optional_keys = {
+        "HF_TOKEN": "Used for CLI-based syncs and GitHub workflow dispatch",
         "TAVILY_API_KEY": "Recommended for meta intelligence",
         "EXA_API_KEY": "Recommended for semantic search",
+        "VULTR_API_KEY": "GPU embeddings fallback",
+        "BRAVE_API_KEY": "Privacy-preserving search",
+        "PERPLEXITY_API_KEY": "Long-form research fallback",
+        "JINA_AI_API_KEY": "Content rerankers",
+        "KAGI_API_KEY": "High precision search",
+        "GITHUB_API_KEY": "Repository-scope search",
     }
     
     has_missing_required = False
@@ -134,7 +489,11 @@ def check_environment():
     status_html += "</ul>"
     
     if has_missing_required:
-        status_html += "<p style='color: red;'><strong>⚠ Warning:</strong> Some required API keys are missing. Configure them in the HF Space settings.</p>"
+        status_html += (
+            "<p style='color: red;'><strong>⚠ Warning:</strong> "
+            "Some required API keys are missing. Configure them in the HF Space settings."  # noqa: E501
+            "</p>"
+        )
     
     return status_html
 
@@ -143,125 +502,179 @@ def create_gradio_interface():
     """Create the Gradio interface with tabs."""
     
     # About content with Vawlrath's personality
-    about_html = """
-    <div style="padding: 20px;">
-        <h1>Arena Improver</h1>
-        <p style="font-style: italic; color: #666;">
-            "Your deck's terrible. Let me show you how to fix it."<br/>
-            — <strong>Vawlrathh, The Small'n</strong>
-        </p>
-        
-        <h2>🎯 What This Is</h2>
-        <p>
-            Listen up. I'm <strong>Vawlrathh, The Small'n</strong>—a pint-sized, sharp-tongued version 
-            of Volrath, The Fallen. Despite my stature, I know MTG Arena better than you know your own 
-            deck (which, frankly, isn't saying much).
-        </p>
-        
-        <p>
-            <strong>Arena Improver</strong> is an MCP-powered deck analysis tool that actually works. 
-            It analyzes your janky brews, tells you what's wrong (plenty), and helps you build something 
-            that won't embarrass you at FNM.
-        </p>
-        
-        <h3>What Makes This Not-Garbage</h3>
-        <ul>
-            <li><strong>Physical Card Prices:</strong> Shows you what your Arena deck costs in real cardboard</li>
-            <li><strong>Real-Time Strategy Chat:</strong> Talk to me via WebSocket. I'll tell you the truth</li>
-            <li><strong>AI Consensus Checking:</strong> Two AI brains so you don't get bad advice</li>
-            <li><strong>Sequential Reasoning:</strong> Breaks down complex decisions into steps you can follow</li>
-            <li><strong>Full MCP Integration:</strong> Memory, sequential thinking, omnisearch—the works</li>
-        </ul>
-        
-        <h3>🎖️ MCP 1st Birthday Hackathon</h3>
-        <p>
-            This project is submitted for the <strong>MCP 1st Birthday Hackathon</strong>. 
-            Visit the <a href="https://huggingface.co/MCP-1st-Birthday" target="_blank">hackathon page</a> 
-            to see more amazing MCP-powered projects.
-        </p>
-        
-        <p style="margin-top: 30px; color: #666;">
-            <strong>Repository:</strong> 
-            <a href="https://github.com/clduab11/arena-improver" target="_blank">
-                github.com/clduab11/arena-improver
-            </a>
-        </p>
-    </div>
-    """
-    
+    about_html = textwrap.dedent(
+        f"""
+<div style="padding: 20px;">
+    <h1>Arena Improver</h1>
+    <p style="font-style: italic; color: #666;">
+        "Your deck's terrible. Let me show you how to fix it."<br/>
+        — <strong>Vawlrathh, The Small'n</strong>
+    </p>
+
+    <h2>🎯 What This Is</h2>
+    <p>
+        Listen up. I'm <strong>Vawlrathh, The Small'n</strong>—a pint-sized,
+        sharp-tongued version of Volrath, The Fallen. Despite my stature, I
+        know MTG Arena better than you know your own deck (which, frankly,
+        isn't saying much).
+    </p>
+
+    <p>
+        <strong>Arena Improver</strong> is an MCP-powered deck analysis tool
+        that actually works. It analyzes your janky brews, tells you what's
+        wrong (plenty), and helps you build something that won't embarrass
+        you at FNM.
+    </p>
+
+    <h3>What Makes This Not-Garbage</h3>
+    <ul>
+        <li><strong>Physical Card Prices:</strong> Shows you what your Arena
+        deck costs in real cardboard</li>
+        <li><strong>Real-Time Strategy Chat:</strong> Talk to me via WebSocket.
+        I'll tell you the truth</li>
+        <li><strong>AI Consensus Checking:</strong> Two AI brains so you don't
+        get bad advice</li>
+        <li><strong>Sequential Reasoning:</strong> Breaks down complex
+        decisions into steps you can follow</li>
+        <li><strong>Full MCP Integration:</strong> Memory, sequential thinking,
+        omnisearch—the works</li>
+    </ul>
+
+    <h3>🎖️ MCP 1st Birthday Hackathon</h3>
+    <p>
+        This project is submitted for the
+        <strong>MCP 1st Birthday Hackathon</strong>. Visit the
+        <a href="https://huggingface.co/MCP-1st-Birthday" target="_blank">
+            hackathon page
+        </a>
+        to see more MCP-powered projects.
+    </p>
+
+    <p style="margin-top: 30px; color: #666;">
+        <strong>Repository:</strong>
+        <a href="{REPO_URL}" target="_blank">
+            github.com/clduab11/arena-improver
+        </a>
+    </p>
+ </div>
+        """
+    )
+
     # Quick Start instructions
-    quick_start_html = """
-    <div style="padding: 20px;">
-        <h2>🚀 Quick Start Guide</h2>
-        
-        <h3>Using the API</h3>
-        <p>
-            The FastAPI server is running and accessible through the <strong>API Documentation</strong> tab.
-            You can explore all available endpoints, try them out directly, and see example responses.
-        </p>
-        
-        <h3>Key Endpoints</h3>
-        <ul>
-            <li><strong>POST /api/v1/upload/csv</strong> - Upload a deck from Steam Arena CSV export</li>
-            <li><strong>POST /api/v1/upload/text</strong> - Upload a deck from Arena text format</li>
-            <li><strong>POST /api/v1/analyze/{deck_id}</strong> - Analyze a deck's strengths and weaknesses</li>
-            <li><strong>POST /api/v1/optimize/{deck_id}</strong> - Get AI-powered optimization suggestions</li>
-            <li><strong>GET /api/v1/purchase/{deck_id}</strong> - Get physical card purchase information</li>
-            <li><strong>WebSocket /api/v1/ws/chat/{user_id}</strong> - Chat with Vawlrathh in real-time</li>
-        </ul>
-        
-        <h3>Example Workflow</h3>
-        <ol>
-            <li>Export your deck from Arena as CSV or text</li>
-            <li>Upload it using the <code>/api/v1/upload/csv</code> or <code>/api/v1/upload/text</code> endpoint</li>
-            <li>Get the returned <code>deck_id</code></li>
-            <li>Analyze it with <code>/api/v1/analyze/{deck_id}</code></li>
-            <li>Get optimization suggestions with <code>/api/v1/optimize/{deck_id}</code></li>
-            <li>Check physical card prices with <code>/api/v1/purchase/{deck_id}</code></li>
-        </ol>
-        
-        <h3>WebSocket Chat</h3>
-        <p>
-            Connect to <code>ws://this-space-url/api/v1/ws/chat/your_user_id</code> to chat with me 
-            in real-time. Send JSON messages like:
-        </p>
-        <pre><code>{
-  "type": "chat",
-  "message": "How do I beat control decks?",
-  "context": {"deck_id": 1}
-}</code></pre>
-        
-        <h3>Need Help?</h3>
-        <p>
-            Check the full documentation at 
-            <a href="https://github.com/clduab11/arena-improver" target="_blank">
-                GitHub Repository
-            </a>
-        </p>
-        
-        <p style="margin-top: 30px; font-style: italic; color: #666;">
-            "If you have to ask, your deck probably needs more removal."<br/>
-            — Vawlrathh
-        </p>
-    </div>
-    """
+    quick_start_html = textwrap.dedent(
+        f"""
+<div style="padding: 20px;">
+    <h2>🚀 Quick Start Guide</h2>
+
+    <h3>Using the API</h3>
+    <p>
+        The FastAPI server is running and accessible through the
+        <strong>API Documentation</strong> tab. You can explore all available
+        endpoints, try them out directly, and see example responses.
+    </p>
+
+    <h3>Key Endpoints</h3>
+    <ul>
+        <li>
+            <strong>POST /api/v1/upload/csv</strong> - Upload a deck from Steam
+            Arena CSV export
+        </li>
+        <li>
+            <strong>POST /api/v1/upload/text</strong> - Upload a deck from
+            Arena text format
+        </li>
+        <li>
+            <strong>POST /api/v1/analyze/{{deck_id}}</strong>
+            - Analyze a deck's strengths and weaknesses
+        </li>
+        <li>
+            <strong>POST /api/v1/optimize/{{deck_id}}</strong>
+            - Get AI-powered optimization suggestions
+        </li>
+        <li>
+            <strong>GET /api/v1/purchase/{{deck_id}}</strong>
+            - Get physical card purchase information
+        </li>
+        <li>
+            <strong>WebSocket /api/v1/ws/chat/{{user_id}}</strong>
+            - Chat with Vawlrathh in real-time
+        </li>
+    </ul>
+
+    <h3>Example Workflow</h3>
+    <ol>
+        <li>Export your deck from Arena as CSV or text</li>
+        <li>Upload it using the <code>/api/v1/upload/csv</code> or
+        <code>/api/v1/upload/text</code> endpoint</li>
+        <li>Get the returned <code>deck_id</code></li>
+        <li>Analyze it with <code>/api/v1/analyze/{{deck_id}}</code></li>
+        <li>Get optimization suggestions with
+        <code>/api/v1/optimize/{{deck_id}}</code></li>
+        <li>Check physical card prices with
+        <code>/api/v1/purchase/{{deck_id}}</code></li>
+    </ol>
+
+    <h3>WebSocket Chat</h3>
+    <p>
+        Connect to <code>ws://this-space-url/api/v1/ws/chat/your_user_id</code>
+        to chat with me in real-time. Send JSON messages like:
+    </p>
+    <pre><code>{{
+    "type": "chat",
+    "message": "How do I beat control decks?",
+    "context": {{"deck_id": 1}}
+}}</code></pre>
+
+    <h3>Need Help?</h3>
+    <p>
+        Check the full documentation at
+        <a href="{REPO_URL}" target="_blank">
+            GitHub Repository
+        </a>
+    </p>
+
+    <p style="margin-top: 30px; font-style: italic; color: #666;">
+        "If you have to ask, your deck probably needs more removal."<br/>
+        — Vawlrathh
+    </p>
+</div>
+        """
+    )
     
     # Environment status
     env_status_html = check_environment()
     
     # Create the interface with tabs
-    with gr.Blocks(title="Arena Improver - Vawlrathh's Deck Analysis") as interface:
+    with gr.Blocks(
+        title="Arena Improver - Vawlrathh's Deck Analysis",
+    ) as interface:
         gr.Markdown("# Arena Improver - Vawlrathh, The Small'n")
         gr.Markdown("*Your deck's terrible. Let me show you how to fix it.*")
         
         with gr.Tabs():
             with gr.Tab("API Documentation"):
-                gr.Markdown("""
-                ### Interactive API Documentation
-                The embedded documentation below allows you to explore and test all API endpoints.
-                Click on any endpoint to expand it, then click "Try it out" to make requests.
-                """)
-                gr.HTML(f'<iframe src="{DOCS_URL}" width="100%" height="800px" style="border: 1px solid #ccc; border-radius: 4px;"></iframe>')
+                docs_markdown = textwrap.dedent(
+                    """
+                    ### Interactive API Documentation
+                    Use the embedded Swagger UI below to explore and test the
+                    available API endpoints. Expand any route and select
+                    "Try it out" to make test requests directly from the
+                    browser.
+                    """
+                )
+                gr.Markdown(docs_markdown)
+
+                iframe_html = textwrap.dedent(
+                    f"""
+                    <iframe
+                        src="{DOCS_URL}"
+                        width="100%"
+                        height="800px"
+                        style="border: 1px solid #ccc; border-radius: 4px;">
+                    </iframe>
+                    """
+                )
+                gr.HTML(iframe_html)
             
             with gr.Tab("About"):
                 gr.HTML(about_html)
@@ -271,26 +684,48 @@ def create_gradio_interface():
             
             with gr.Tab("Status"):
                 gr.HTML(env_status_html)
-                gr.Markdown("""
-                ### Troubleshooting
-                If you see missing API keys above:
-                1. Go to your Hugging Face Space settings
-                2. Click on "Settings" → "Repository secrets"
-                3. Add the required API keys as secrets
-                4. Restart the Space
-                
-                See the [HF Deployment Guide](https://github.com/clduab11/arena-improver/blob/main/docs/HF_DEPLOYMENT.md) 
-                for detailed instructions.
-                """)
+                troubleshooting_md = textwrap.dedent(
+                    f"""
+                    ### Troubleshooting
+                    If you see missing API keys above:
+                    1. Open your Hugging Face Space settings
+                    2. Navigate to "Repository secrets"
+                    3. Add the required API keys shown in the table
+                    4. Restart the Space from the top bar
+
+                    See the [HF Deployment Guide][hf-deployment-guide] for
+                    detailed instructions.
+
+                    [hf-deployment-guide]: {HF_DEPLOYMENT_GUIDE_URL}
+                    """
+                )
+                gr.Markdown(troubleshooting_md)
+
+            with gr.Tab("Deck Uploads"):
+                build_deck_uploader_tab()
+
+            with gr.Tab("Chat"):
+                build_chat_ui_tab()
+
+            with gr.Tab("Meta Intelligence"):
+                build_meta_dashboard_tab()
         
-        gr.Markdown("""
-        ---
-        <p style="text-align: center; color: #666; font-size: 0.9em;">
-            Diminutive in size, not in strategic prowess. | 
-            <a href="https://github.com/clduab11/arena-improver" target="_blank">GitHub</a> | 
-            <a href="https://huggingface.co/MCP-1st-Birthday" target="_blank">MCP 1st Birthday Hackathon</a>
-        </p>
-        """)
+        footer_md = textwrap.dedent(
+            f"""
+            ---
+            <p style="text-align: center; color: #666; font-size: 0.9em;">
+                Diminutive in size, not in strategic prowess. |
+                <a href="{REPO_URL}" target="_blank">
+                    GitHub Repository
+                </a>
+                |
+                <a href="{HACKATHON_URL}" target="_blank">
+                    MCP 1st Birthday Hackathon
+                </a>
+            </p>
+            """
+        )
+        gr.Markdown(footer_md)
     
     return interface
 
@@ -304,8 +739,8 @@ def main():
     # Start FastAPI server
     try:
         fastapi_process = start_fastapi_server()
-    except Exception as e:
-        logger.error(f"Failed to start FastAPI server: {e}")
+    except (OSError, subprocess.SubprocessError) as exc:
+        logger.error("Failed to start FastAPI server: %s", exc)
         sys.exit(1)
     
     # Wait for FastAPI to be ready
@@ -315,7 +750,9 @@ def main():
         try:
             fastapi_process.wait(timeout=5)
         except subprocess.TimeoutExpired:
-            logger.warning("FastAPI process did not terminate gracefully, forcing kill")
+            logger.warning(
+                "FastAPI process did not terminate gracefully; forcing kill",
+            )
             fastapi_process.kill()
             fastapi_process.wait()
         sys.exit(1)
@@ -325,7 +762,7 @@ def main():
         logger.info("Creating Gradio interface...")
         interface = create_gradio_interface()
         
-        logger.info(f"Launching Gradio on port {GRADIO_PORT}...")
+        logger.info("Launching Gradio on port %s...", GRADIO_PORT)
         logger.info("=" * 60)
         
         # Launch Gradio
@@ -335,8 +772,8 @@ def main():
             share=False,
             show_error=True
         )
-    except Exception as e:
-        logger.error(f"Failed to launch Gradio interface: {e}")
+    except (OSError, RuntimeError) as exc:
+        logger.error("Failed to launch Gradio interface: %s", exc)
         fastapi_process.kill()
         sys.exit(1)
 

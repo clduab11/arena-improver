@@ -115,12 +115,19 @@ Add to: `https://github.com/clduab11/arena-improver/settings/secrets/actions`
 
 Add to: `https://huggingface.co/spaces/MCP-1st-Birthday/vawlrath/settings`
 
-| Secret | Required | Description |
-|--------|----------|-------------|
-| `OPENAI_API_KEY` | ✅ Yes | OpenAI API for GPT-4 and embeddings |
-| `ANTHROPIC_API_KEY` | ✅ Yes | Anthropic API for Claude consensus |
-| `TAVILY_API_KEY` | ⚠️ Recommended | Tavily API for meta intelligence |
-| `EXA_API_KEY` | ⚠️ Recommended | Exa API for semantic search |
+| Secret | Required? | Purpose |
+|--------|-----------|---------|
+| `OPENAI_API_KEY` | ✅ Required | Primary inference + embeddings |
+| `ANTHROPIC_API_KEY` | ✅ Required | Claude consensus + workflow reviews |
+| `HF_TOKEN` | ✅ Required | Allows `hf upload --create-pr` and manual GH syncs |
+| `TAVILY_API_KEY` | ⚠️ Recommended | Real-time meta intelligence |
+| `EXA_API_KEY` | ⚠️ Recommended | Semantic search + opponent scouting |
+| `VULTR_API_KEY` | Optional | GPU embeddings fallback |
+| `BRAVE_API_KEY` | Optional | Privacy-focused search |
+| `PERPLEXITY_API_KEY` | Optional | Long-form research answers |
+| `JINA_AI_API_KEY` | Optional | Content chunking + rerankers |
+| `KAGI_API_KEY` | Optional | High fidelity search |
+| `GITHUB_API_KEY` | Optional | PAT for repo-scope lookups |
 
 ## 🚀 How It Works
 

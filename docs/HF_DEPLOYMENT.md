@@ -37,26 +37,19 @@ The Space requires several API keys to function properly. Configure them in your
 2. Scroll to "Repository secrets"
 3. Add the following secrets:
 
-#### Required API Keys
-
-| Secret Name | Description | How to Get |
-|-------------|-------------|------------|
-| `OPENAI_API_KEY` | OpenAI API key for GPT-4 and embeddings | [OpenAI API Keys](https://platform.openai.com/api-keys) |
-| `ANTHROPIC_API_KEY` | Anthropic API key for Claude (consensus checking) | [Anthropic Console](https://console.anthropic.com/) |
-
-#### Optional but Recommended API Keys
-
-| Secret Name | Description | How to Get |
-|-------------|-------------|------------|
-| `TAVILY_API_KEY` | Tavily API for real-time meta intelligence | [Tavily](https://tavily.com/) |
-| `EXA_API_KEY` | Exa API for semantic search | [Exa](https://exa.ai/) |
-
-#### Less Common API Keys
-
-| Secret Name | Description | How to Get |
-|-------------|-------------|------------|
-| `BRAVE_API_KEY` | Brave Search API (optional) | [Brave Search](https://brave.com/search/api/) |
-| `PERPLEXITY_API_KEY` | Perplexity API (optional) | [Perplexity](https://www.perplexity.ai/) |
+| Secret Name | Required? | Purpose | How to Get |
+|-------------|-----------|---------|------------|
+| `OPENAI_API_KEY` | ✅ Required | Primary inference (SmartInference, embeddings, fallback chat) | [OpenAI API Keys](https://platform.openai.com/api-keys) |
+| `ANTHROPIC_API_KEY` | ✅ Required | Claude consensus + PR reviews | [Anthropic Console](https://console.anthropic.com/) |
+| `HF_TOKEN` | ✅ Required | `hf upload --create-pr` pushes + GitHub workflow dispatch | [Hugging Face Settings → Tokens](https://huggingface.co/settings/tokens) |
+| `TAVILY_API_KEY` | ⚠️ Recommended | Real-time meta intelligence searches | [Tavily](https://tavily.com/) |
+| `EXA_API_KEY` | ⚠️ Recommended | Semantic search + similarity lookups | [Exa](https://exa.ai/) |
+| `VULTR_API_KEY` | Optional | GPU embeddings fallback for SmartInference | [Vultr Control Panel](https://my.vultr.com/settings/#settingsapi) |
+| `BRAVE_API_KEY` | Optional | Privacy-focused search fallback | [Brave Search](https://brave.com/search/api/) |
+| `PERPLEXITY_API_KEY` | Optional | Research agent + follow-up sources | [Perplexity](https://www.perplexity.ai/) |
+| `JINA_AI_API_KEY` | Optional | Content processing + rerankers | [Jina AI](https://jina.ai/) |
+| `KAGI_API_KEY` | Optional | High-precision search & FastGPT | [Kagi](https://kagi.com/settings?p=api) |
+| `GITHUB_API_KEY` | Optional | PAT with `public_repo` for repo-wide search | [GitHub Tokens](https://github.com/settings/tokens) |
 
 ### Step 4: Verify the Deployment
 
@@ -125,6 +118,28 @@ diff -qr /tmp/local_snapshot /tmp/hf_pr_latest
 ```
 
 This mirrors our Codespace verification flow and is helpful when you want to double-check the generated PR before merging.
+
+### Manual GitHub Workflow Trigger (Optional)
+
+If you prefer to reuse the self-hosted GitHub workflow for syncing (e.g., when the CLI is unavailable), run the helper script which wraps `gh workflow run sync-to-hf.yml`:
+
+```bash
+./scripts/run_hf_sync.sh            # defaults to main
+./scripts/run_hf_sync.sh feature-x  # target a different ref
+```
+
+The script queues the workflow, watches the logs, and prints the actions URL if GitHub does not return a run ID. You will need the GitHub CLI (`gh auth login`) with `workflow` scope for this command to succeed.
+
+### Verifying the Hugging Face Restart
+
+After either the CLI sync or the manual GitHub workflow finishes:
+
+1. Open the **Status** tab on your Space and confirm the latest commit hash and secret checklist are green: `https://huggingface.co/spaces/MCP-1st-Birthday/vawlrathh?logs=1#status`
+2. Hit the proxied FastAPI health endpoint to make sure port 7860 came back:  
+  `curl https://huggingface.co/spaces/MCP-1st-Birthday/vawlrathh/+/proxy/7860/health`
+3. Optionally check the Gradio surface via the dedicated port (should return HTML):  
+  `curl -I https://huggingface.co/spaces/MCP-1st-Birthday/vawlrathh/+/proxy/7861/`
+4. If either check fails, restart the Space from the **Settings → Runtime** section and rerun the health curls.
 
 ## 🏗️ Architecture
 
