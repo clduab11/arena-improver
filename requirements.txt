@@ -17,7 +17,7 @@ sqlalchemy==2.0.36
 aiosqlite==0.20.0
 
 # Async file I/O
-aiofiles==24.1.0
+aiofiles==23.2.1  # Gradio requires <24.0
 
 # HTTP client (for Scryfall API, etc.)
 httpx==0.28.1
@@ -38,4 +38,4 @@ psutil==6.1.0
 
 # Hugging Face Space Integration
 gradio>=4.0.0
-huggingface-hub==0.26.1  # pin <1.0 to avoid breaking CLI flags
+huggingface-hub==0.36.0  # last pre-1.0 release that keeps CLI + downstream libs happy

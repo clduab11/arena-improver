@@ -1,14 +1,26 @@
 """Integration tests for health check and monitoring endpoints."""
 
+import os
+import time
+
 import pytest
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
+
 from src.main import app
+
+
+def _asgi_client_kwargs() -> dict:
+    """Shared httpx client kwargs compatible with httpx>=0.28."""
+    return {
+        "transport": ASGITransport(app=app),
+        "base_url": "http://test",
+    }
 
 
 @pytest.mark.asyncio
 async def test_root_endpoint():
     """Test root endpoint returns service information."""
-    async with AsyncClient(app=app, base_url="http://test") as client:
+    async with AsyncClient(**_asgi_client_kwargs()) as client:
         response = await client.get("/")
 
     assert response.status_code == 200
@@ -23,7 +35,7 @@ async def test_root_endpoint():
 @pytest.mark.asyncio
 async def test_health_check_endpoint():
     """Test basic health check endpoint."""
-    async with AsyncClient(app=app, base_url="http://test") as client:
+    async with AsyncClient(**_asgi_client_kwargs()) as client:
         response = await client.get("/health")
 
     assert response.status_code == 200
@@ -37,7 +49,7 @@ async def test_health_check_endpoint():
 @pytest.mark.asyncio
 async def test_liveness_probe():
     """Test liveness probe endpoint."""
-    async with AsyncClient(app=app, base_url="http://test") as client:
+    async with AsyncClient(**_asgi_client_kwargs()) as client:
         response = await client.get("/health/live")
 
     assert response.status_code == 200
@@ -50,7 +62,7 @@ async def test_liveness_probe():
 @pytest.mark.asyncio
 async def test_readiness_probe():
     """Test readiness probe endpoint."""
-    async with AsyncClient(app=app, base_url="http://test") as client:
+    async with AsyncClient(**_asgi_client_kwargs()) as client:
         response = await client.get("/health/ready")
 
     # Should return 200 if database is initialized
@@ -69,7 +81,7 @@ async def test_readiness_probe():
 @pytest.mark.asyncio
 async def test_metrics_endpoint():
     """Test metrics endpoint returns monitoring data."""
-    async with AsyncClient(app=app, base_url="http://test") as client:
+    async with AsyncClient(**_asgi_client_kwargs()) as client:
         response = await client.get("/metrics")
 
     assert response.status_code == 200
@@ -112,7 +124,7 @@ async def test_metrics_endpoint():
 @pytest.mark.asyncio
 async def test_status_endpoint():
     """Test status endpoint returns comprehensive service status."""
-    async with AsyncClient(app=app, base_url="http://test") as client:
+    async with AsyncClient(**_asgi_client_kwargs()) as client:
         response = await client.get("/status")
 
     assert response.status_code == 200
@@ -151,7 +163,7 @@ async def test_status_endpoint():
 @pytest.mark.asyncio
 async def test_metrics_cpu_values():
     """Test that CPU metrics are reasonable."""
-    async with AsyncClient(app=app, base_url="http://test") as client:
+    async with AsyncClient(**_asgi_client_kwargs()) as client:
         response = await client.get("/metrics")
 
     data = response.json()
@@ -168,7 +180,7 @@ async def test_metrics_cpu_values():
 @pytest.mark.asyncio
 async def test_metrics_cache_values():
     """Test that cache metrics are valid."""
-    async with AsyncClient(app=app, base_url="http://test") as client:
+    async with AsyncClient(**_asgi_client_kwargs()) as client:
         response = await client.get("/metrics")
 
     data = response.json()
@@ -194,9 +206,7 @@ async def test_metrics_cache_values():
 @pytest.mark.asyncio
 async def test_health_endpoints_response_time():
     """Test that health endpoints respond quickly."""
-    import time
-
-    async with AsyncClient(app=app, base_url="http://test") as client:
+    async with AsyncClient(**_asgi_client_kwargs()) as client:
         start = time.time()
         response = await client.get("/health")
         elapsed = time.time() - start
@@ -209,7 +219,7 @@ async def test_health_endpoints_response_time():
 @pytest.mark.asyncio
 async def test_multiple_health_checks():
     """Test that multiple health checks work consistently."""
-    async with AsyncClient(app=app, base_url="http://test") as client:
+    async with AsyncClient(**_asgi_client_kwargs()) as client:
         responses = []
         for _ in range(5):
             response = await client.get("/health")
@@ -225,9 +235,7 @@ async def test_multiple_health_checks():
 @pytest.mark.asyncio
 async def test_status_features_reflect_environment():
     """Test that feature flags reflect actual environment."""
-    import os
-
-    async with AsyncClient(app=app, base_url="http://test") as client:
+    async with AsyncClient(**_asgi_client_kwargs()) as client:
         response = await client.get("/status")
 
     data = response.json()

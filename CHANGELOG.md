@@ -151,7 +151,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **requirements-dev.txt**: Separate development dependencies including:
   - Testing framework: pytest 8.3.4 with plugins (asyncio, mock, xdist, coverage)
-  - Code quality: ruff 0.8.2, mypy 1.13.0, pylint 3.3.2, bandit 1.7.10
+  - Code quality: ruff 0.9.3, mypy 1.13.0, pylint 3.3.2, bandit 1.7.10
   - Code formatting: black 24.10.0, isort 5.13.2, autoflake 2.3.1
   - Documentation: sphinx 8.1.3, mkdocs 1.6.1 with material theme
   - Security scanning: pip-audit 2.7.3, safety 3.2.11

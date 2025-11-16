@@ -75,7 +75,7 @@ Attempts to push directly from GitHub-hosted runners now receive a `403` advisin
 
 ### Prerequisites
 
-- `huggingface_hub` 0.26.x installed (pinned <1.0 to keep `--create-pr` behaviour stable)
+- `huggingface_hub` 0.36.x installed (last v0 release that keeps `--create-pr` stable while satisfying Gradio/Transformers)
 - `HF_TOKEN` exported in your shell (see Setup Step 2)
 - `hf` CLI authenticated via the token
 
