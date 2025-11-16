@@ -1,10 +1,10 @@
 # Hugging Face Space Deployment Guide
 
-This guide explains how to deploy and configure Arena Improver on Hugging Face Spaces with automatic synchronization from GitHub.
+This guide explains how to deploy and configure Arena Improver on Hugging Face Spaces now that synchronization is handled manually instead of through GitHub Actions.
 
 ## 🎯 Overview
 
-Arena Improver is automatically synchronized from the GitHub repository to a Hugging Face Space at [MCP-1st-Birthday/vawlrath](https://huggingface.co/spaces/MCP-1st-Birthday/vawlrath). Every push to the `main` branch triggers an automatic deployment.
+Arena Improver targets the Hugging Face Space at [MCP-1st-Birthday/vawlrathh](https://huggingface.co/spaces/MCP-1st-Birthday/vawlrathh). Direct pushes from GitHub-hosted runners are currently blocked for this Space, so we rely on `hf upload --create-pr` to keep it in sync.
 
 ## 🔧 Setup Instructions
 
@@ -17,13 +17,17 @@ Arena Improver is automatically synchronized from the GitHub repository to a Hug
 5. Click "Generate token"
 6. **Copy the token immediately** (you won't see it again)
 
-### Step 2: Add HF_TOKEN to GitHub Secrets
+### Step 2: Add HF_TOKEN to Your Local Environment
 
-1. Go to your GitHub repository settings: `https://github.com/clduab11/arena-improver/settings/secrets/actions`
-2. Click "New repository secret"
-3. Name: `HF_TOKEN`
-4. Value: Paste the token you copied from Hugging Face
-5. Click "Add secret"
+1. Copy `.env.example` to `.env` if it does not exist
+2. Add `HF_TOKEN=<your token>` to the file (never commit this value)
+3. Source the file whenever you plan to sync so the `hf` CLI can read the token:
+
+```bash
+set -a && source .env && set +a
+```
+
+> Still have a GitHub repository secret named `HF_TOKEN`? Leaving it in place is fine, but it is no longer required now that the workflow has been removed.
 
 ### Step 3: Configure Environment Variables in Hugging Face Space
 
@@ -63,49 +67,64 @@ After adding the secrets:
 3. Try the "API Documentation" tab to explore available endpoints
 4. Test a simple request (e.g., GET `/health`)
 
-## 🔄 How Automatic Sync Works
+## 🔄 Manual Sync Workflow (CLI First)
 
-### GitHub Actions Workflow
+### Why the GitHub Action Was Removed
 
-The `.github/workflows/sync-to-hf.yml` workflow:
+Attempts to push directly from GitHub-hosted runners now receive a `403` advising us to "pass create_pr=1". Rather than keep a flaky workflow around, we deleted `.github/workflows/sync-to-hf.yml` and standardised on the CLI command below. This keeps us fully compliant with Hugging Face limitations and prevents accidental overwrites of Space-local state such as `.cache/`.
 
-1. **Triggers**: Runs on every push to `main` branch, or manually via workflow_dispatch
-2. **Checkout**: Fetches the complete git history
-3. **Push**: Force pushes to the Hugging Face Space repository
+### Prerequisites
 
-```yaml
-name: Sync to Hugging Face Space
+- `huggingface_hub` installed (either globally or inside `.venv`)
+- `HF_TOKEN` exported in your shell (see Setup Step 2)
+- `hf` CLI authenticated via the token
 
-on:
-  push:
-    branches: [main]
-  workflow_dispatch:
+### Canonical Command
 
-jobs:
-  sync-to-hf:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-          lfs: true
-      
-      - name: Push to Hugging Face Space
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: |
-          git remote add hf https://clduab11:$HF_TOKEN@huggingface.co/spaces/MCP-1st-Birthday/vawlrath
-          git push hf main --force
+```bash
+set -a && source .env && set +a && source .venv/bin/activate && \
+hf upload MCP-1st-Birthday/vawlrathh . \
+  --repo-type space \
+  --token "$HF_TOKEN" \
+  --create-pr \
+  --commit-message "HF Sync | <summary + tests>" \
+  --exclude ".git/*" --exclude ".venv/*" --exclude "__pycache__/*" \
+  --exclude ".pytest_cache/*" --exclude ".mypy_cache/*" --exclude ".ruff_cache/*" \
+  --exclude "node_modules/*" --exclude "dist/*" --exclude "build/*" \
+  --exclude "data/*" --exclude "*.log"
 ```
 
-### Manual Sync
+### Commit Message Guidance for Agentic Assistants
 
-You can trigger a manual sync:
+Hugging Face treats `hf upload --create-pr` commits as PRs, so give reviewers (human or AI) the full context:
 
-1. Go to `https://github.com/clduab11/arena-improver/actions/workflows/sync-to-hf.yml`
-2. Click "Run workflow"
-3. Select the `main` branch
-4. Click "Run workflow"
+1. **Intent** – e.g., `hf sync | add deck heuristics`
+2. **Testing** – cite the key commands (`pytest tests/unit/test_chat_agent.py`)
+3. **Dependencies/Secrets** – call out additions or state "no dependency changes"
+4. **Follow-up Actions** – note if the Space needs a restart or cache clear
+
+Example: `HF Sync | refresh docs + remove GH workflow (pytest tests/integration/test_api.py)`
+
+### Reviewing and Merging the Space PR
+
+1. Visit `https://huggingface.co/spaces/MCP-1st-Birthday/vawlrathh/discussions`
+2. Filter by **Pull Requests** and open the latest entry
+3. Review the diff, confirm ignores behaved, and click **Merge**
+4. Optionally delete the auto-created branch inside the Space UI
+
+### Optional: Inspect the PR Locally
+
+```bash
+hf download MCP-1st-Birthday/vawlrathh /tmp/hf_pr_latest \
+  --repo-type space \
+  --revision refs/pr/<id> \
+  --token "$HF_TOKEN" \
+  --exclude ".git/*"
+
+diff -qr /tmp/local_snapshot /tmp/hf_pr_latest
+```
+
+This mirrors our Codespace verification flow and is helpful when you want to double-check the generated PR before merging.
 
 ## 🏗️ Architecture
 
@@ -174,6 +193,7 @@ This will:
 **Problem**: Space shows error or doesn't load
 
 **Solutions**:
+ 
 1. Check the Space logs (click "View logs" in HF Space interface)
 2. Verify all required API keys are set
 3. Check if FastAPI server started successfully
@@ -184,25 +204,29 @@ This will:
 **Problem**: API requests fail with 500 errors
 
 **Solutions**:
+ 
 1. Check the "Status" tab to see which API keys are missing
 2. Verify API keys are valid (not expired, have sufficient quota)
 3. Check FastAPI server logs for detailed error messages
 
 ### Sync Failed
 
-**Problem**: GitHub Action fails to sync
+**Problem**: `hf upload --create-pr` exited with a non-zero status
 
 **Solutions**:
-1. Verify `HF_TOKEN` is set in GitHub secrets
-2. Check token has **Write** permissions
-3. Verify Space exists: `https://huggingface.co/spaces/MCP-1st-Birthday/vawlrath`
-4. Check GitHub Actions logs for detailed error
+ 
+1. Re-run the command with `HF_HUB_ENABLE_HF_TRANSFER=1` for large files
+2. Make sure `HF_TOKEN` is exported in your shell and has **Write** permissions
+3. Confirm the Space slug `MCP-1st-Birthday/vawlrathh` is spelled correctly
+4. Check the CLI output for the generated PR URL; open it to review Hugging Face-side validation errors
+5. If uploads keep failing, run `hf whoami -t "$HF_TOKEN"` to confirm the token is still active
 
 ### Port Conflicts
 
 **Problem**: "Address already in use" errors
 
 **Solutions**:
+ 
 1. The `app.py` automatically kills existing uvicorn processes
 2. If issues persist, restart the Space
 3. Check for other processes using ports 7860-7861
@@ -230,6 +254,7 @@ This will:
 ### Check Space Status
 
 Visit the "Status" tab in your Space to see:
+
 - Which API keys are configured
 - FastAPI server health
 - Environment configuration
@@ -237,16 +262,18 @@ Visit the "Status" tab in your Space to see:
 ### View Logs
 
 Hugging Face provides logs:
+
 1. Go to your Space
 2. Click "View logs" (top right)
 3. See real-time server output
 
-### GitHub Actions Status
+### Track Hugging Face PRs
 
-Monitor sync status:
-1. Go to `https://github.com/clduab11/arena-improver/actions`
-2. Check "Sync to Hugging Face Space" workflow
-3. View logs for any failed runs
+Monitor manual sync status:
+
+1. Visit `https://huggingface.co/spaces/MCP-1st-Birthday/vawlrathh/discussions`
+2. Filter for pull requests and open the one created by your CLI run
+3. Review diffs, merge when satisfied, then optionally delete the temporary branch
 
 ## 🎯 Development Workflow
 
@@ -254,9 +281,9 @@ Monitor sync status:
 
 1. Develop and test locally
 2. Commit changes to a feature branch
-3. Open a Pull Request
-4. Once merged to `main`, auto-syncs to HF Space
-5. Verify deployment on HF Space
+3. Open a Pull Request and land it on `main`
+4. Run the canonical `hf upload --create-pr` command from this guide
+5. Review and merge the generated Hugging Face PR, then verify the deployment on the Space
 
 ### Testing Changes Before Deployment
 
