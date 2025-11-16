@@ -3,7 +3,7 @@
 from dataclasses import asdict
 from typing import Optional
 from fastapi import APIRouter, UploadFile, File, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from ..models.deck import Deck, DeckAnalysis, DeckSuggestion
 from ..services.deck_analyzer import DeckAnalyzer
@@ -52,8 +52,8 @@ class PerformanceRecordRequest(BaseModel):
     games_lost: int
     notes: str = ""
     
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "opponent_archetype": "Mono-Red Aggro",
                 "result": "win",
@@ -62,6 +62,7 @@ class PerformanceRecordRequest(BaseModel):
                 "notes": "Good sideboard choices"
             }
         }
+    )
 
 
 @router.post("/upload/csv", response_model=dict)
@@ -217,9 +218,50 @@ async def optimize_deck(deck_id: int, include_purchase_info: bool = True):
     )
 
 
+@router.get("/stats/compare", response_model=dict)
+async def compare_deck_stats(deck_id1: int, deck_id2: int):
+    """Compare performance statistics between two decks."""
+    if deck_id1 == deck_id2:
+        raise HTTPException(
+            status_code=400,
+            detail="Provide two distinct deck IDs for comparison"
+        )
+    
+    deck1 = await sql_service.get_deck(deck_id1)
+    if not deck1:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Deck {deck_id1} not found"
+        )
+    deck2 = await sql_service.get_deck(deck_id2)
+    if not deck2:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Deck {deck_id2} not found"
+        )
+    
+    memory_service = SmartMemoryService(sql_service)
+    return await memory_service.compare_decks(deck_id1, deck_id2)
+
+
+@router.get("/stats/{deck_id}/trends", response_model=dict)
+async def get_deck_trends(deck_id: int, days: int = 30):
+    """Get performance trends for a deck within a time window."""
+    deck = await sql_service.get_deck(deck_id)
+    if not deck:
+        raise HTTPException(status_code=404, detail="Deck not found")
+    
+    memory_service = SmartMemoryService(sql_service)
+    return await memory_service.get_performance_trends(deck_id, days=days)
+
+
 @router.get("/stats/{deck_id}", response_model=dict)
 async def get_deck_stats(deck_id: int):
     """Get performance statistics for a deck."""
+    deck = await sql_service.get_deck(deck_id)
+    if not deck:
+        raise HTTPException(status_code=404, detail="Deck not found")
+    
     memory_service = SmartMemoryService(sql_service)
     stats = await memory_service.get_deck_statistics(deck_id)
     insights = await memory_service.get_learning_insights(deck_id)

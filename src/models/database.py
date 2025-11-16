@@ -1,10 +1,27 @@
 """Database models using SQLAlchemy."""
 
-from datetime import datetime
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text, JSON
-from sqlalchemy.orm import declarative_base, relationship
+from datetime import datetime, UTC
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    Float,
+    DateTime,
+    ForeignKey,
+    Text,
+    JSON,
+)
+from sqlalchemy.orm import DeclarativeBase, relationship
 
-Base = declarative_base()
+
+class Base(DeclarativeBase):
+    """Base declarative class for SQLAlchemy models."""
+    pass
+
+
+def utcnow() -> datetime:
+    """Return timezone-aware UTC datetime for SQLAlchemy defaults."""
+    return datetime.now(UTC)
 
 
 class DeckModel(Base):
@@ -15,12 +32,24 @@ class DeckModel(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
     format = Column(String)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+    updated_at = Column(
+        DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow
+    )
     
     # Relationships
-    cards = relationship("CardModel", back_populates="deck", cascade="all, delete-orphan")
-    performances = relationship("PerformanceModel", back_populates="deck", cascade="all, delete-orphan")
+    cards = relationship(
+        "CardModel",
+        back_populates="deck",
+        cascade="all, delete-orphan"
+    )
+    performances = relationship(
+        "PerformanceModel",
+        back_populates="deck",
+        cascade="all, delete-orphan"
+    )
 
 
 class CardModel(Base):
@@ -38,7 +67,8 @@ class CardModel(Base):
     colors = Column(JSON)  # Store as JSON array
     rarity = Column(String, nullable=True)
     set_code = Column(String, nullable=True)
-    is_sideboard = Column(Integer, default=0)  # 0 for mainboard, 1 for sideboard
+    # 0 for mainboard, 1 for sideboard
+    is_sideboard = Column(Integer, default=0)
     
     # Relationships
     deck = relationship("DeckModel", back_populates="cards")
@@ -51,7 +81,7 @@ class PerformanceModel(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     deck_id = Column(Integer, ForeignKey("decks.id"))
-    match_date = Column(DateTime, default=datetime.utcnow)
+    match_date = Column(DateTime(timezone=True), default=utcnow)
     opponent_archetype = Column(String)
     result = Column(String)  # win, loss, draw
     games_won = Column(Integer)

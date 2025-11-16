@@ -1,6 +1,5 @@
 """Pytest configuration and fixtures."""
 
-import asyncio
 import os
 
 import httpx
@@ -8,14 +7,6 @@ import pytest
 import pytest_asyncio
 
 from src.services.smart_sql import SmartSQLService
-
-
-@pytest.fixture(scope="session")
-def event_loop():
-    """Create an event loop for the test session."""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
 
 
 @pytest.fixture(scope="function")
@@ -44,7 +35,7 @@ async def initialized_app():
 
 
 @pytest.fixture(scope="session")
-def api_base_url() -> str:
+def api_base_url_setting() -> str:
     """Base URL for integration tests (overridable via env)."""
     return (
         os.getenv("FASTAPI_BASE_URL")
@@ -54,10 +45,10 @@ def api_base_url() -> str:
 
 
 @pytest_asyncio.fixture()
-async def api_client(api_base_url: str):
+async def api_client(api_base_url_setting: str):
     """Shared HTTP client that ensures the API is reachable."""
     async with httpx.AsyncClient(
-        base_url=api_base_url,
+        base_url=api_base_url_setting,
         timeout=30.0
     ) as client:
         try:
@@ -68,6 +59,8 @@ async def api_client(api_base_url: str):
             httpx.ConnectError,
             httpx.TimeoutException,
         ) as exc:
-            pytest.skip(f"FastAPI server unavailable at {api_base_url}: {exc}")
+            pytest.skip(
+                f"FastAPI server unavailable at {api_base_url_setting}: {exc}"
+            )
 
         yield client

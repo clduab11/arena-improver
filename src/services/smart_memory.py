@@ -1,7 +1,7 @@
 """SmartMemory service for historical performance tracking."""
 
-from typing import List, Dict, Optional
-from datetime import datetime, timedelta
+from typing import List, Dict, DefaultDict
+from datetime import datetime, timedelta, UTC
 from collections import defaultdict
 
 from .smart_sql import SmartSQLService
@@ -55,16 +55,20 @@ class SmartMemoryService:
         """Analyze performance trends over time."""
         performances = await self.sql_service.get_deck_performance(deck_id)
         
-        cutoff_date = datetime.utcnow() - timedelta(days=days)
+        cutoff_date = datetime.now(UTC) - timedelta(days=days)
         
         # Filter to specified time period
         recent_performances = [
             p for p in performances
-            if datetime.fromisoformat(p['match_date']) >= cutoff_date
+            if self._parse_match_date(p['match_date']) >= cutoff_date
         ]
         
         if not recent_performances:
-            return {'trend': 'no_data', 'direction': 'stable'}
+            return {
+                'trend': 'no_data',
+                'weekly_stats': [],
+                'sample_size': 0
+            }
         
         # Calculate win rate by week
         weekly_stats = self._calculate_weekly_stats(recent_performances)
@@ -97,7 +101,11 @@ class SmartMemoryService:
                 'total_matches': stats2['total_matches']
             },
             'win_rate_diff': stats1['win_rate'] - stats2['win_rate'],
-            'better_deck': deck_id1 if stats1['win_rate'] > stats2['win_rate'] else deck_id2
+            'better_deck': (
+                deck_id1
+                if stats1['win_rate'] > stats2['win_rate']
+                else deck_id2
+            )
         }
     
     async def get_learning_insights(self, deck_id: int) -> List[str]:
@@ -113,7 +121,10 @@ class SmartMemoryService:
                 )
             elif stats['win_rate'] < 45:
                 insights.append(
-                    f"Struggling with {stats['win_rate']}% win rate - consider optimization"
+                    (
+                        f"Struggling with {stats['win_rate']}% win rate - "
+                        "consider optimization"
+                    )
                 )
         
         # Matchup analysis
@@ -128,10 +139,16 @@ class SmartMemoryService:
             )
             
             insights.append(
-                f"Best matchup: {best_matchup[0]} ({best_matchup[1]['win_rate']}%)"
+                (
+                    f"Best matchup: {best_matchup[0]} "
+                    f"({best_matchup[1]['win_rate']}%)"
+                )
             )
             insights.append(
-                f"Worst matchup: {worst_matchup[0]} ({worst_matchup[1]['win_rate']}%)"
+                (
+                    f"Worst matchup: {worst_matchup[0]} "
+                    f"({worst_matchup[1]['win_rate']}%)"
+                )
             )
         
         # Sample size warnings
@@ -144,7 +161,9 @@ class SmartMemoryService:
     
     def _calculate_matchup_stats(self, performances: List[Dict]) -> Dict:
         """Calculate statistics by opponent archetype."""
-        matchup_data = defaultdict(lambda: {'wins': 0, 'total': 0})
+        matchup_data: DefaultDict[str, Dict[str, int]] = defaultdict(
+            lambda: {'wins': 0, 'total': 0}
+        )
         
         for perf in performances:
             archetype = perf['opponent_archetype']
@@ -155,7 +174,10 @@ class SmartMemoryService:
         # Calculate win rates
         matchup_stats = {}
         for archetype, data in matchup_data.items():
-            win_rate = (data['wins'] / data['total'] * 100) if data['total'] > 0 else 0
+            win_rate = (
+                (data['wins'] / data['total'] * 100)
+                if data['total'] > 0 else 0
+            )
             matchup_stats[archetype] = {
                 'win_rate': round(win_rate, 2),
                 'matches_played': data['total'],
@@ -164,7 +186,10 @@ class SmartMemoryService:
         
         return matchup_stats
     
-    def _calculate_recent_form(self, recent_performances: List[Dict]) -> List[str]:
+    def _calculate_recent_form(
+        self,
+        recent_performances: List[Dict]
+    ) -> List[str]:
         """Calculate recent form (W/L pattern)."""
         return [
             'W' if p['result'] == 'win' else 'L'
@@ -176,7 +201,7 @@ class SmartMemoryService:
         weekly_data = defaultdict(lambda: {'wins': 0, 'total': 0})
         
         for perf in performances:
-            match_date = datetime.fromisoformat(perf['match_date'])
+            match_date = self._parse_match_date(perf['match_date'])
             week_start = match_date - timedelta(days=match_date.weekday())
             week_key = week_start.strftime('%Y-%m-%d')
             
@@ -187,7 +212,10 @@ class SmartMemoryService:
         # Convert to list and calculate win rates
         weekly_stats = []
         for week, data in sorted(weekly_data.items()):
-            win_rate = (data['wins'] / data['total'] * 100) if data['total'] > 0 else 0
+            win_rate = (
+                (data['wins'] / data['total'] * 100)
+                if data['total'] > 0 else 0
+            )
             weekly_stats.append({
                 'week': week,
                 'win_rate': round(win_rate, 2),
@@ -203,7 +231,11 @@ class SmartMemoryService:
         
         # Compare recent weeks to earlier weeks
         recent = weekly_stats[-2:]
-        earlier = weekly_stats[:-2] if len(weekly_stats) > 2 else weekly_stats[:1]
+        earlier = (
+            weekly_stats[:-2]
+            if len(weekly_stats) > 2
+            else weekly_stats[:1]
+        )
         
         recent_avg = sum(w['win_rate'] for w in recent) / len(recent)
         earlier_avg = sum(w['win_rate'] for w in earlier) / len(earlier)
@@ -216,3 +248,11 @@ class SmartMemoryService:
             return 'declining'
         else:
             return 'stable'
+
+    @staticmethod
+    def _parse_match_date(match_date: str) -> datetime:
+        """Parse stored ISO timestamps and normalize timezone awareness."""
+        parsed = datetime.fromisoformat(match_date)
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=UTC)
+        return parsed
