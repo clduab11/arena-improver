@@ -75,7 +75,7 @@ Attempts to push directly from GitHub-hosted runners now receive a `403` advisin
 
 ### Prerequisites
 
-- `huggingface_hub` installed (either globally or inside `.venv`)
+- `huggingface_hub` 0.26.x installed (pinned <1.0 to keep `--create-pr` behaviour stable)
 - `HF_TOKEN` exported in your shell (see Setup Step 2)
 - `hf` CLI authenticated via the token
 
@@ -107,7 +107,7 @@ Example: `HF Sync | refresh docs + remove GH workflow (pytest tests/integration/
 
 ### Reviewing and Merging the Space PR
 
-1. Visit `https://huggingface.co/spaces/MCP-1st-Birthday/vawlrathh/discussions`
+1. Visit `https://huggingface.co/spaces/MCP-1st-Birthday/vawlrathh/pulls`
 2. Filter by **Pull Requests** and open the latest entry
 3. Review the diff, confirm ignores behaved, and click **Merge**
 4. Optionally delete the auto-created branch inside the Space UI

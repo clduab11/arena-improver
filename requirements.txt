@@ -38,3 +38,4 @@ psutil==6.1.0
 
 # Hugging Face Space Integration
 gradio>=4.0.0
+huggingface-hub==0.26.1  # pin <1.0 to avoid breaking CLI flags
