@@ -1,3 +1,15 @@
+---
+emoji: 🎴
+colorFrom: purple
+colorTo: indigo
+sdk: gradio
+app_file: app.py
+license: agpl-3.0
+pinned: false
+---
+
+<!-- markdownlint-disable MD032 MD031 MD040 -->
+
 # Vawlratth, your MTG: Arena Savior
 
 *"Your deck's terrible. Let me show you how to fix it."*

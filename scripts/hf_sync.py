@@ -260,6 +260,40 @@ def main() -> None:
     print(
         f"Authenticated as: {who.get('name') or who.get('email') or 'unknown'}"
     )
+
+    try:
+        repo_info = api.repo_info(
+            args.repo_id,
+            repo_type=args.repo_type,
+            revision=args.revision,
+        )
+    except HfHubHTTPError as exc:
+        if exc.response is not None and exc.response.status_code == 404:
+            print(
+                "Target repo missing; attempting to create it before upload.",
+                file=sys.stderr,
+            )
+            api.create_repo(
+                repo_id=args.repo_id,
+                repo_type=args.repo_type,
+                private=args.private,
+                space_sdk=args.space_sdk,
+                exist_ok=True,
+            )
+            repo_info = api.repo_info(
+                args.repo_id,
+                repo_type=args.repo_type,
+                revision=args.revision,
+            )
+        else:
+            print(
+                f"Failed to fetch repo info: {exc}",
+                file=sys.stderr,
+            )
+            raise SystemExit(1) from exc
+
+    parent_commit = getattr(repo_info, "sha", None)
+
     ignore_patterns = build_ignore_list(folder, args.ignore)
     allow_patterns = args.allow or None
 
@@ -269,6 +303,8 @@ def main() -> None:
     print(f"  revision: {args.revision}")
     print(f"  folder: {folder}")
     print(f"  create_pr: {args.create_pr}")
+    if parent_commit:
+        print(f"  parent_commit: {parent_commit}")
     if allow_patterns:
         print(f"  allow_patterns: {allow_patterns}")
     print(f"  ignore_patterns: {ignore_patterns}")
@@ -290,6 +326,7 @@ def main() -> None:
                 commit_message=args.commit_message,
                 commit_description=args.commit_description,
                 create_pr=True,
+                parent_commit=parent_commit,
             )
         else:
             api.upload_large_folder(
