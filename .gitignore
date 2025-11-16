@@ -187,10 +187,6 @@ cython_debug/
 #  and can be added to the global gitignore or merged into this file. However, if you prefer, 
 #  you could uncomment the following to ignore the entire vscode folder
 # .vscode/
-.history
-
-# Hugging Face CLI manifests
-hf_payload_manifest.json
 
 # Ruff stuff:
 .ruff_cache/
