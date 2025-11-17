@@ -1,0 +1,480 @@
+# Advanced Review Configuration
+# ============================================================================
+# Enterprise-grade workflow optimizations for Claude AI code reviews
+# Designed for 10x productivity improvements
+#
+# Last updated: 2025-11-11
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# Review Modes - Multi-stage Pipeline
+# ----------------------------------------------------------------------------
+review_modes:
+  # Quick triage mode (30-60 seconds)
+  triage:
+    enabled: true
+    max_tokens: 1024
+    focus:
+      - critical_security
+      - syntax_errors
+      - obvious_bugs
+    skip_detailed_analysis: true
+    auto_approve_threshold: 95  # Auto-approve if score >= 95%
+
+  # Standard review mode (2-3 minutes)
+  standard:
+    enabled: true
+    max_tokens: 4096
+    focus:
+      - security
+      - bugs
+      - code_quality
+      - performance
+      - testing
+    incremental_only: true  # Only review changed lines
+
+  # Deep analysis mode (5-10 minutes)
+  deep:
+    enabled: true
+    max_tokens: 8192
+    focus:
+      - architecture
+      - design_patterns
+      - scalability
+      - maintainability
+      - technical_debt
+      - documentation
+    analyze_dependencies: true
+    check_breaking_changes: true
+
+  # Security audit mode (3-5 minutes)
+  security:
+    enabled: true
+    max_tokens: 4096
+    focus:
+      - owasp_top_10
+      - dependency_vulnerabilities
+      - authentication
+      - authorization
+      - data_validation
+      - encryption
+      - secrets_exposure
+    require_approval: true  # Block merge on critical issues
+
+# ----------------------------------------------------------------------------
+# Incremental Review Settings
+# ----------------------------------------------------------------------------
+incremental_review:
+  # Only analyze changed lines plus context
+  enabled: true
+
+  # Context lines before/after changes
+  context_lines: 5
+
+  # Analyze entire function if changes inside it
+  expand_to_function: true
+
+  # Analyze entire class if >50% changed
+  expand_to_class_threshold: 0.5
+
+  # Maximum file size for incremental (bytes)
+  max_file_size: 100000
+
+  # Skip incremental for these patterns
+  always_full_review:
+    - "**/*.sql"
+    - "**/migrations/**"
+    - "**/*_test.py"
+
+# ----------------------------------------------------------------------------
+# Review Caching
+# ----------------------------------------------------------------------------
+caching:
+  # Enable result caching
+  enabled: true
+
+  # Cache storage backend
+  backend: "redis"  # redis, sqlite, memory
+
+  # Cache TTL (seconds)
+  ttl: 86400  # 24 hours
+
+  # Cache key includes
+  key_components:
+    - file_content_hash
+    - review_mode
+    - claude_model
+    - config_version
+
+  # Invalidate cache on
+  invalidate_on:
+    - config_change
+    - model_update
+    - manual_request
+
+# ----------------------------------------------------------------------------
+# Auto-fix Generation
+# ----------------------------------------------------------------------------
+auto_fix:
+  # Enable automatic fix generation
+  enabled: true
+
+  # Auto-commit fixes
+  auto_commit: false  # Require human approval by default
+
+  # Auto-commit for these severity levels
+  auto_commit_for:
+    - trivial  # Formatting, whitespace, imports
+    - low      # Simple optimizations, type hints
+
+  # Create separate commits per fix type
+  separate_commits: true
+
+  # Commit message prefix
+  commit_prefix: "fix(auto): "
+
+  # Maximum fixes per PR
+  max_fixes_per_pr: 20
+
+  # Fix categories
+  fix_types:
+    formatting:
+      enabled: true
+      tools: ["ruff", "black"]
+    imports:
+      enabled: true
+      tools: ["isort", "autoflake"]
+    type_hints:
+      enabled: true
+      confidence_threshold: 0.8
+    simple_bugs:
+      enabled: true
+      confidence_threshold: 0.9
+    performance:
+      enabled: false  # Require manual review
+    security:
+      enabled: false  # Always require manual review
+
+# ----------------------------------------------------------------------------
+# Breaking Change Detection
+# ----------------------------------------------------------------------------
+breaking_changes:
+  # Enable breaking change detection
+  enabled: true
+
+  # Check for API changes
+  api_compatibility:
+    - public_function_signature
+    - public_class_interface
+    - return_type_changes
+    - parameter_changes
+    - removed_exports
+
+  # Semantic versioning enforcement
+  semver_enforcement:
+    enabled: true
+    breaking_change_requires: "major"  # major, minor, patch
+
+  # Generate migration guide
+  generate_migration_guide: true
+
+  # Block merge on breaking changes
+  block_on_breaking: false  # Warn but don't block
+
+  # Exceptions (allowed breaking changes)
+  allowed_patterns:
+    - "**/*_internal.py"
+    - "**/experimental/**"
+
+# ----------------------------------------------------------------------------
+# Performance Optimization
+# ----------------------------------------------------------------------------
+performance:
+  # Parallel processing
+  parallel_processing:
+    enabled: true
+    max_workers: 4
+    chunk_size: 5  # Files per chunk
+
+  # Smart context loading
+  smart_context:
+    enabled: true
+    max_context_size: 50000  # characters
+    relevance_threshold: 0.7
+
+  # Streaming responses
+  streaming:
+    enabled: true
+    chunk_size: 1024
+
+  # Request batching
+  batching:
+    enabled: true
+    max_batch_size: 10
+    batch_timeout: 5  # seconds
+
+# ----------------------------------------------------------------------------
+# Team Learning & Feedback
+# ----------------------------------------------------------------------------
+learning:
+  # Learn from accepted/rejected suggestions
+  enabled: true
+
+  # Feedback collection
+  collect_feedback:
+    thumbs_up_down: true
+    comment_reactions: true
+    commit_acceptance: true  # Track which fixes were committed
+
+  # Adapt to team preferences
+  team_preferences:
+    enabled: true
+    min_data_points: 20
+    confidence_threshold: 0.75
+
+  # Pattern detection
+  detect_patterns:
+    coding_style: true
+    common_mistakes: true
+    preferred_solutions: true
+    rejected_suggestions: true
+
+  # Feedback storage
+  storage:
+    backend: "sqlite"
+    path: ".github/claude_learning.db"
+
+# ----------------------------------------------------------------------------
+# Review Priority Queue
+# ----------------------------------------------------------------------------
+priority_queue:
+  # Enable intelligent prioritization
+  enabled: true
+
+  # Priority factors (weighted)
+  factors:
+    file_importance: 0.3      # Based on CODEOWNERS
+    change_size: 0.2          # Larger = higher priority
+    security_risk: 0.3        # Security files = higher
+    test_coverage: 0.1        # Low coverage = higher
+    author_experience: 0.1    # Junior dev = higher
+
+  # High priority patterns
+  high_priority:
+    - "**/*auth*.py"
+    - "**/*security*.py"
+    - "**/api/**/*.py"
+    - "**/database/**/*.py"
+
+  # Low priority patterns
+  low_priority:
+    - "**/*_test.py"
+    - "**/docs/**"
+    - "**/*.md"
+
+# ----------------------------------------------------------------------------
+# Technical Debt Tracking
+# ----------------------------------------------------------------------------
+technical_debt:
+  # Enable debt tracking
+  enabled: true
+
+  # Debt indicators
+  indicators:
+    - high_complexity
+    - code_duplication
+    - missing_tests
+    - outdated_dependencies
+    - todo_comments
+    - deprecated_usage
+
+  # Debt scoring
+  scoring:
+    max_score: 100
+    thresholds:
+      excellent: 90
+      good: 70
+      acceptable: 50
+      concerning: 30
+      critical: 0
+
+  # Track over time
+  historical_tracking:
+    enabled: true
+    storage: ".github/tech_debt_history.json"
+    report_frequency: "weekly"
+
+# ----------------------------------------------------------------------------
+# Integration Settings
+# ----------------------------------------------------------------------------
+integrations:
+  # Slack notifications
+  slack:
+    enabled: false
+    webhook_url_secret: "SLACK_WEBHOOK_URL"
+    notify_on:
+      - critical_issues
+      - review_complete
+      - auto_fix_applied
+    channels:
+      critical: "#engineering-alerts"
+      reviews: "#code-reviews"
+
+  # Microsoft Teams
+  teams:
+    enabled: false
+    webhook_url_secret: "TEAMS_WEBHOOK_URL"
+    notify_on:
+      - critical_issues
+      - review_complete
+
+  # JIRA integration
+  jira:
+    enabled: false
+    base_url_secret: "JIRA_BASE_URL"
+    api_token_secret: "JIRA_API_TOKEN"
+    create_tickets_for:
+      - critical_security
+      - high_priority_bugs
+    link_to_pr: true
+
+  # Linear integration
+  linear:
+    enabled: false
+    api_key_secret: "LINEAR_API_KEY"
+    team_id: ""
+    create_issues_for:
+      - technical_debt
+      - improvement_suggestions
+
+# ----------------------------------------------------------------------------
+# Metrics & Analytics
+# ----------------------------------------------------------------------------
+metrics:
+  # Enable metrics collection
+  enabled: true
+
+  # Track these metrics
+  collect:
+    - review_time
+    - issues_found
+    - issues_by_severity
+    - auto_fixes_applied
+    - developer_acceptance_rate
+    - false_positive_rate
+    - code_quality_score
+    - technical_debt_trend
+
+  # Dashboard generation
+  dashboard:
+    enabled: true
+    format: "markdown"
+    output: ".github/metrics_dashboard.md"
+    update_frequency: "daily"
+
+  # Export formats
+  export:
+    - json
+    - csv
+    - prometheus  # For Grafana integration
+
+# ----------------------------------------------------------------------------
+# Quality Gates
+# ----------------------------------------------------------------------------
+quality_gates:
+  # Enable quality gates
+  enabled: true
+
+  # Block merge conditions
+  block_merge_on:
+    critical_security: true
+    high_security: true
+    syntax_errors: true
+    failing_tests: true
+    coverage_decrease: true
+    breaking_changes: false  # Warn only
+
+  # Minimum requirements
+  requirements:
+    min_test_coverage: 80
+    max_complexity: 15
+    max_technical_debt_score: 30
+    max_critical_issues: 0
+    max_high_issues: 2
+
+  # Override mechanism
+  override:
+    allowed_by:
+      - repository_admin
+      - tech_lead
+    require_reason: true
+    log_overrides: true
+
+# ----------------------------------------------------------------------------
+# Code Ownership Integration
+# ----------------------------------------------------------------------------
+code_ownership:
+  # Use CODEOWNERS file
+  enabled: true
+
+  # Auto-assign reviewers
+  auto_assign:
+    enabled: true
+    max_reviewers: 2
+
+  # Require owner approval
+  require_owner_approval: true
+
+  # Notify owners on changes
+  notify_owners:
+    slack: true
+    email: false
+
+# ----------------------------------------------------------------------------
+# Advanced Security Scanning
+# ----------------------------------------------------------------------------
+advanced_security:
+  # Supply chain analysis
+  supply_chain:
+    enabled: true
+    check_new_dependencies: true
+    verify_checksums: true
+    check_licenses: true
+
+  # Secrets scanning (enhanced)
+  secrets:
+    enabled: true
+    entropy_threshold: 4.5
+    custom_patterns: []
+    scan_git_history: false  # Only current changes
+
+  # Vulnerability database
+  vulnerability_db:
+    sources:
+      - "OSV"
+      - "GitHub Advisory"
+      - "NVD"
+    update_frequency: "daily"
+
+# ============================================================================
+# Usage Examples
+# ============================================================================
+#
+# Trigger specific review mode:
+#   @claude review:triage      # Quick 30-second check
+#   @claude review:standard    # Normal 2-3 minute review
+#   @claude review:deep        # Comprehensive 5-10 minute analysis
+#   @claude review:security    # Security-focused audit
+#
+# Enable auto-fix:
+#   @claude fix:formatting     # Auto-fix formatting issues
+#   @claude fix:imports        # Auto-fix import issues
+#   @claude fix:all            # Apply all safe auto-fixes
+#
+# Breaking change check:
+#   @claude check:breaking     # Check for breaking changes
+#
+# Generate metrics:
+#   @claude metrics            # Generate current metrics dashboard
+#
+# ============================================================================
