@@ -1,3 +1,22 @@
+---
+title: Vawlrathh MTG Arena Analyzer
+emoji: 🧙
+colorFrom: indigo
+colorTo: purple
+sdk: gradio
+sdk_version: 5.49.1
+app_file: app.py
+pinned: true
+license: agpl-3.0
+short_description: Sarcastic AI-powered MTG Arena deck analyzer with MCP integration
+tags:
+  - mtg
+  - magic-the-gathering
+  - deck-analysis
+  - mcp
+  - ai
+---
+
 # Arena Improver
 
 *"Your deck's terrible. Let me show you how to fix it."*
