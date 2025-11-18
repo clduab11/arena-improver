@@ -3,7 +3,7 @@
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import psutil
@@ -58,13 +58,22 @@ app.include_router(router, prefix="/api/v1", tags=["decks"])
 app.include_router(ws_router, prefix="/api/v1", tags=["chat"])
 
 
-# Root endpoint (/) removed to avoid conflict with Gradio UI mounted at /gradio
-# The Gradio interface is the main UI accessible at /gradio
+# Root endpoint redirects to Gradio UI for HuggingFace Spaces compatibility
+# The Gradio interface is mounted at /gradio for clean separation from FastAPI routes
 # API information available at:
-#   - /api - API service info (this endpoint)
+#   - /api - API service info
 #   - /docs - Interactive Swagger UI documentation
 #   - /redoc - ReDoc API documentation
-# This is a breaking change as of version 2.0.0.
+
+
+@app.get("/", include_in_schema=False)
+async def root():
+    """Redirect root path to Gradio UI.
+    
+    HuggingFace Spaces and users expect the root path to be accessible.
+    This redirects to the Gradio interface mounted at /gradio.
+    """
+    return RedirectResponse(url="/gradio")
 
 
 @app.get("/api")
