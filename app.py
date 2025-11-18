@@ -1,8 +1,8 @@
 """Hugging Face Space wrapper for Arena Improver.
 
-This module provides a Gradio interface that wraps the FastAPI application
-for deployment on Hugging Face Spaces. The FastAPI server runs on port 7860
-(HF Space default), and Gradio provides a web interface on port 7861.
+This module provides a combined Gradio + FastAPI application for deployment
+on Hugging Face Spaces. Both services run on port 7860 (HF Space default)
+using Gradio's mount_gradio_app to consolidate the servers.
 
 "Your deck's terrible. Let me show you how to fix it."
 — Vawlrathh, The Small'n
@@ -12,9 +12,6 @@ for deployment on Hugging Face Spaces. The FastAPI server runs on port 7860
 
 import json
 import os
-import subprocess
-import sys
-import time
 import uuid
 import logging
 import textwrap
@@ -22,29 +19,29 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
 import gradio as gr
+from gradio import mount_gradio_app
 import httpx
 import websockets
+import uvicorn
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# HF Space configuration
-FASTAPI_PORT = 7860  # HF Spaces expect main app on 7860
-GRADIO_PORT = 7861   # Gradio interface on different port
-HEALTH_CHECK_URL = f"http://localhost:{FASTAPI_PORT}/health"
-DOCS_URL = f"/proxy/{FASTAPI_PORT}/docs"  # HF Space proxy pattern
+# HF Space configuration - single port for both FastAPI and Gradio
+APP_PORT = 7860  # HF Spaces only exposes port 7860
 REPO_URL = "https://github.com/clduab11/arena-improver"
 HACKATHON_URL = "https://huggingface.co/MCP-1st-Birthday"
 HF_DEPLOYMENT_GUIDE_URL = (
     f"{REPO_URL}/blob/main/docs/HF_DEPLOYMENT.md"
 )
+# Use localhost for internal API calls since both services are on the same port
 API_BASE_URL = os.getenv(
     "FASTAPI_BASE_URL",
-    f"http://localhost:{FASTAPI_PORT}",
+    f"http://localhost:{APP_PORT}",
 )
 WS_BASE_URL = os.getenv(
     "FASTAPI_WS_URL",
-    f"ws://localhost:{FASTAPI_PORT}",
+    f"ws://localhost:{APP_PORT}",
 )
 
 
@@ -365,88 +362,6 @@ def build_meta_dashboard_tab():
     )
 
 
-def kill_existing_uvicorn():
-    """Kill any existing uvicorn processes to avoid port conflicts."""
-    try:
-        # Find and kill existing uvicorn processes running on our port
-        # More specific pattern to avoid killing unrelated processes
-        result = subprocess.run(
-            ["pkill", "-9", "-f", f"uvicorn.*{FASTAPI_PORT}"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if result.returncode == 0:
-            logger.info(
-                "Killed existing uvicorn processes on port %s",
-                FASTAPI_PORT,
-            )
-        time.sleep(1)  # Give processes time to clean up
-    except (OSError, subprocess.SubprocessError) as exc:
-        logger.warning("Error killing uvicorn processes: %s", exc)
-
-
-def start_fastapi_server():
-    """Start the FastAPI server in the background."""
-    kill_existing_uvicorn()
-    
-    logger.info("Starting FastAPI server on port %s...", FASTAPI_PORT)
-    
-    try:
-        # Start uvicorn as a subprocess
-        process = subprocess.Popen(
-            [
-                sys.executable, "-m", "uvicorn",
-                "src.main:app",
-                "--host", "0.0.0.0",
-                "--port", str(FASTAPI_PORT),
-                "--log-level", "info",
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
-        )
-
-        logger.info("FastAPI server started with PID %s", process.pid)
-        return process
-    except (OSError, subprocess.SubprocessError) as exc:
-        logger.error("Failed to start FastAPI server: %s", exc)
-        raise
-
-
-def wait_for_fastapi_ready(max_wait=60, check_interval=2):
-    """Wait for FastAPI server to be ready by checking health endpoint.
-    
-    Args:
-        max_wait: Maximum time to wait in seconds
-        check_interval: Time between health checks in seconds
-    
-    Returns:
-        bool: True if server is ready, False otherwise
-    """
-    logger.info("Waiting for FastAPI server to be ready...")
-    start_time = time.time()
-    
-    while time.time() - start_time < max_wait:
-        try:
-            response = httpx.get(HEALTH_CHECK_URL, timeout=5.0)
-            if response.status_code == 200:
-                logger.info("FastAPI server is ready!")
-                return True
-        except (httpx.ConnectError, httpx.TimeoutException):
-            logger.info(
-                "Server not ready yet, waiting %s seconds...",
-                check_interval,
-            )
-            time.sleep(check_interval)
-        except httpx.HTTPError as exc:
-            logger.warning("Health check error: %s", exc)
-            time.sleep(check_interval)
-    
-    logger.error(
-        "FastAPI server did not become ready within %s seconds",
-        max_wait,
-    )
-    return False
 
 
 def check_environment():
@@ -660,14 +575,18 @@ def create_gradio_interface():
                     available API endpoints. Expand any route and select
                     "Try it out" to make test requests directly from the
                     browser.
+
+                    **Note:** API documentation is available at `/docs` on the
+                    same port as this interface.
                     """
                 )
                 gr.Markdown(docs_markdown)
 
+                # Use /docs directly since FastAPI and Gradio are on the same port
                 iframe_html = textwrap.dedent(
-                    f"""
+                    """
                     <iframe
-                        src="{DOCS_URL}"
+                        src="/docs"
                         width="100%"
                         height="800px"
                         style="border: 1px solid #ccc; border-radius: 4px;">
@@ -730,52 +649,51 @@ def create_gradio_interface():
     return interface
 
 
+def create_combined_app():
+    """Create a combined FastAPI + Gradio application.
+
+    Returns:
+        FastAPI: The combined application with Gradio mounted at root.
+    """
+    # Import the FastAPI app from src.main
+    from src.main import app as fastapi_app
+
+    # Create Gradio interface
+    logger.info("Creating Gradio interface...")
+    gradio_interface = create_gradio_interface()
+
+    # Mount Gradio onto FastAPI at root path
+    # FastAPI routes remain at /api/v1/*, /docs, /health, etc.
+    # Gradio UI handles the root path for HF Spaces
+    combined_app = mount_gradio_app(
+        fastapi_app,
+        gradio_interface,
+        path="/"
+    )
+
+    logger.info("Gradio mounted on FastAPI at root path (/)")
+    return combined_app
+
+
+# Create the combined app at module level for uvicorn
+app = create_combined_app()
+
+
 def main():
     """Main entry point for the Hugging Face Space."""
     logger.info("=" * 60)
     logger.info("Arena Improver - Hugging Face Space")
     logger.info("=" * 60)
-    
-    # Start FastAPI server
-    try:
-        fastapi_process = start_fastapi_server()
-    except (OSError, subprocess.SubprocessError) as exc:
-        logger.error("Failed to start FastAPI server: %s", exc)
-        sys.exit(1)
-    
-    # Wait for FastAPI to be ready
-    if not wait_for_fastapi_ready(max_wait=60):
-        logger.error("FastAPI server failed to start. Check logs above.")
-        fastapi_process.terminate()
-        try:
-            fastapi_process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            logger.warning(
-                "FastAPI process did not terminate gracefully; forcing kill",
-            )
-            fastapi_process.kill()
-            fastapi_process.wait()
-        sys.exit(1)
-    
-    # Create and launch Gradio interface
-    try:
-        logger.info("Creating Gradio interface...")
-        interface = create_gradio_interface()
-        
-        logger.info("Launching Gradio on port %s...", GRADIO_PORT)
-        logger.info("=" * 60)
-        
-        # Launch Gradio
-        interface.launch(
-            server_name="0.0.0.0",
-            server_port=GRADIO_PORT,
-            share=False,
-            show_error=True
-        )
-    except (OSError, RuntimeError) as exc:
-        logger.error("Failed to launch Gradio interface: %s", exc)
-        fastapi_process.kill()
-        sys.exit(1)
+    logger.info("Starting combined FastAPI + Gradio server on port %s", APP_PORT)
+    logger.info("=" * 60)
+
+    # Launch the combined app with uvicorn
+    uvicorn.run(
+        "app:app",
+        host="0.0.0.0",
+        port=APP_PORT,
+        log_level="info",
+    )
 
 
 if __name__ == "__main__":

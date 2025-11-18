@@ -58,9 +58,13 @@ app.include_router(router, prefix="/api/v1", tags=["decks"])
 app.include_router(ws_router, prefix="/api/v1", tags=["chat"])
 
 
-@app.get("/")
-async def root():
-    """Root endpoint."""
+# Root endpoint removed - Gradio UI handles the root path when mounted via mount_gradio_app
+# API info is available at /docs (Swagger UI) and /redoc (ReDoc)
+
+
+@app.get("/api")
+async def api_info():
+    """API information endpoint."""
     return {
         "service": "Arena Improver",
         "version": __version__,
