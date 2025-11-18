@@ -10,6 +10,7 @@ for deployment on Hugging Face Spaces. The FastAPI server runs on port 7860
 
 # pylint: disable=no-member
 
+import asyncio
 import json
 import os
 import subprocess
@@ -27,6 +28,18 @@ import websockets
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Shared async client for Gradio handlers
+# Note: This is separate from the FastAPI shared client to avoid circular dependencies
+_gradio_http_client: Optional[httpx.AsyncClient] = None
+
+
+async def _get_gradio_client() -> httpx.AsyncClient:
+    """Get or create the Gradio async HTTP client."""
+    global _gradio_http_client
+    if _gradio_http_client is None:
+        _gradio_http_client = httpx.AsyncClient(timeout=60.0)
+    return _gradio_http_client
 
 # HF Space configuration
 FASTAPI_PORT = 7860  # HF Spaces expect main app on 7860
@@ -84,18 +97,19 @@ def builder_registry(
     return decorator
 
 
-def _upload_csv_to_api(file_path: Optional[str]) -> Dict[str, Any]:
+async def _upload_csv_to_api(file_path: Optional[str]) -> Dict[str, Any]:
     """Upload a CSV file to the FastAPI backend with defensive logging."""
 
     if not file_path:
         return {"status": "error", "message": "No CSV file selected"}
 
     try:
+        client = await _get_gradio_client()
         with open(file_path, "rb") as file_handle:
             files = {
                 "file": (os.path.basename(file_path), file_handle, "text/csv"),
             }
-            response = httpx.post(
+            response = await client.post(
                 f"{API_BASE_URL}/api/v1/upload/csv",
                 files=files,
                 timeout=60,
@@ -119,7 +133,7 @@ def _upload_csv_to_api(file_path: Optional[str]) -> Dict[str, Any]:
         return {"status": "error", "message": str(exc)}
 
 
-def _upload_text_to_api(deck_text: str, fmt: str) -> Dict[str, Any]:
+async def _upload_text_to_api(deck_text: str, fmt: str) -> Dict[str, Any]:
     """Upload Arena text export to the FastAPI backend."""
 
     if not deck_text or not deck_text.strip():
@@ -127,7 +141,8 @@ def _upload_text_to_api(deck_text: str, fmt: str) -> Dict[str, Any]:
 
     payload = {"deck_string": deck_text, "format": fmt}
     try:
-        response = httpx.post(
+        client = await _get_gradio_client()
+        response = await client.post(
             f"{API_BASE_URL}/api/v1/upload/text",
             json=payload,
             timeout=60,
@@ -149,11 +164,12 @@ def _upload_text_to_api(deck_text: str, fmt: str) -> Dict[str, Any]:
         return {"status": "error", "message": str(exc)}
 
 
-def _fetch_meta_snapshot(game_format: str) -> Dict[str, Any]:
+async def _fetch_meta_snapshot(game_format: str) -> Dict[str, Any]:
     """Fetch meta intelligence for a specific format."""
 
     try:
-        response = httpx.get(
+        client = await _get_gradio_client()
+        response = await client.get(
             f"{API_BASE_URL}/api/v1/meta/{game_format}",
             timeout=60,
         )
@@ -170,14 +186,15 @@ def _fetch_meta_snapshot(game_format: str) -> Dict[str, Any]:
         return {"status": "error", "message": str(exc)}
 
 
-def _fetch_memory_summary(deck_id: Optional[float]) -> Dict[str, Any]:
+async def _fetch_memory_summary(deck_id: Optional[float]) -> Dict[str, Any]:
     """Fetch Smart Memory stats for the supplied deck id."""
 
     if not deck_id:
         return {"status": "error", "message": "Deck ID required"}
 
     try:
-        response = httpx.get(
+        client = await _get_gradio_client()
+        response = await client.get(
             f"{API_BASE_URL}/api/v1/stats/{int(deck_id)}",
             timeout=60,
         )
@@ -225,9 +242,9 @@ def build_deck_uploader_tab():
         csv_input = gr.File(file_types=[".csv"], label="Arena CSV Export")
         upload_btn = gr.Button("Upload CSV", variant="primary")
 
-    def handle_csv_upload(uploaded_file, previous_id):
+    async def handle_csv_upload(uploaded_file, previous_id):
         file_path = getattr(uploaded_file, "name", None)
-        payload = _upload_csv_to_api(file_path)
+        payload = await _upload_csv_to_api(file_path)
         deck_id = payload.get("deck_id") or previous_id
         return payload, deck_id, deck_id
 
@@ -250,8 +267,8 @@ def build_deck_uploader_tab():
     )
     text_upload_btn = gr.Button("Upload Text", variant="secondary")
 
-    def handle_text_upload(deck_text, fmt, previous_id):
-        payload = _upload_text_to_api(deck_text, fmt)
+    async def handle_text_upload(deck_text, fmt, previous_id):
+        payload = await _upload_text_to_api(deck_text, fmt)
         deck_id = payload.get("deck_id") or previous_id
         return payload, deck_id, deck_id
 
@@ -413,7 +430,7 @@ def start_fastapi_server():
         raise
 
 
-def wait_for_fastapi_ready(max_wait=60, check_interval=2):
+async def wait_for_fastapi_ready(max_wait=60, check_interval=2):
     """Wait for FastAPI server to be ready by checking health endpoint.
     
     Args:
@@ -426,9 +443,11 @@ def wait_for_fastapi_ready(max_wait=60, check_interval=2):
     logger.info("Waiting for FastAPI server to be ready...")
     start_time = time.time()
     
+    client = await _get_gradio_client()
+    
     while time.time() - start_time < max_wait:
         try:
-            response = httpx.get(HEALTH_CHECK_URL, timeout=5.0)
+            response = await client.get(HEALTH_CHECK_URL, timeout=5.0)
             if response.status_code == 200:
                 logger.info("FastAPI server is ready!")
                 return True
@@ -437,10 +456,10 @@ def wait_for_fastapi_ready(max_wait=60, check_interval=2):
                 "Server not ready yet, waiting %s seconds...",
                 check_interval,
             )
-            time.sleep(check_interval)
+            await asyncio.sleep(check_interval)
         except httpx.HTTPError as exc:
             logger.warning("Health check error: %s", exc)
-            time.sleep(check_interval)
+            await asyncio.sleep(check_interval)
     
     logger.error(
         "FastAPI server did not become ready within %s seconds",
@@ -744,7 +763,7 @@ def main():
         sys.exit(1)
     
     # Wait for FastAPI to be ready
-    if not wait_for_fastapi_ready(max_wait=60):
+    if not asyncio.run(wait_for_fastapi_ready(max_wait=60)):
         logger.error("FastAPI server failed to start. Check logs above.")
         fastapi_process.terminate()
         try:
