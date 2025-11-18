@@ -1,6 +1,5 @@
 """Card market pricing and vendor integration service."""
 
-import asyncio
 import logging
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
@@ -67,7 +66,10 @@ class CardMarketInfo:
 
 
 class CardMarketService:
-    """Service for fetching card pricing and vendor information."""
+    """Service for fetching card pricing and vendor information.
+    
+    Can be used as an async context manager for proper resource management.
+    """
 
     def __init__(self, scryfall_service: Optional[ScryfallService] = None):
         """
@@ -77,6 +79,20 @@ class CardMarketService:
             scryfall_service: Optional ScryfallService instance
         """
         self.scryfall = scryfall_service or ScryfallService()
+    
+    async def __aenter__(self):
+        """Async context manager entry."""
+        # Ensure scryfall service is initialized
+        if hasattr(self.scryfall, '__aenter__'):
+            await self.scryfall.__aenter__()
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit."""
+        # Cleanup scryfall service
+        if hasattr(self.scryfall, '__aexit__'):
+            await self.scryfall.__aexit__(exc_type, exc_val, exc_tb)
+        return False
 
     async def get_card_market_info(
         self,
