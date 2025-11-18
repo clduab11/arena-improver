@@ -4,6 +4,9 @@ This module provides a combined Gradio + FastAPI application for deployment
 on Hugging Face Spaces. Both services run on port 7860 (HF Space default)
 using Gradio's mount_gradio_app to consolidate the servers.
 
+The Gradio UI is mounted at /gradio subpath for clean separation from FastAPI routes.
+FastAPI endpoints are available at /api/v1/*, /docs, /health, etc.
+
 "Your deck's terrible. Let me show you how to fix it."
 — Vawlrathh, The Small'n
 """
@@ -11,18 +14,20 @@ using Gradio's mount_gradio_app to consolidate the servers.
 # pylint: disable=no-member
 
 import json
-import os
-import uuid
 import logging
+import os
 import textwrap
+import uuid
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
 import gradio as gr
 from gradio import mount_gradio_app
 import httpx
-import websockets
 import uvicorn
+import websockets
+
+from src.main import app as fastapi_app
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -31,18 +36,18 @@ logger = logging.getLogger(__name__)
 APP_PORT = 7860  # HF Spaces only exposes port 7860
 REPO_URL = "https://github.com/clduab11/arena-improver"
 HACKATHON_URL = "https://huggingface.co/MCP-1st-Birthday"
-HF_DEPLOYMENT_GUIDE_URL = (
-    f"{REPO_URL}/blob/main/docs/HF_DEPLOYMENT.md"
-)
-# Use localhost for internal API calls since both services are on the same port
+HF_DEPLOYMENT_GUIDE_URL = f"{REPO_URL}/blob/main/docs/HF_DEPLOYMENT.md"
+# Both services run on the same port now - these URLs point to localhost
+# for internal communication between Gradio frontend and FastAPI backend
 API_BASE_URL = os.getenv(
     "FASTAPI_BASE_URL",
     f"http://localhost:{APP_PORT}",
-)
+)  # For REST API calls
 WS_BASE_URL = os.getenv(
     "FASTAPI_WS_URL",
     f"ws://localhost:{APP_PORT}",
-)
+)  # For WebSocket connections
+HEALTH_CHECK_URL = f"{API_BASE_URL}/health"
 
 
 @dataclass
@@ -106,10 +111,7 @@ def _upload_csv_to_api(file_path: Optional[str]) -> Dict[str, Any]:
         status_code = exc.response.status_code
         return {
             "status": "error",
-            "message": (
-                "Backend rejected CSV upload "
-                f"({status_code})"
-            ),
+            "message": (f"Backend rejected CSV upload ({status_code})"),
         }
     except Exception as exc:  # pylint: disable=broad-except
         logger.exception("Unexpected CSV upload failure")
@@ -136,10 +138,7 @@ def _upload_text_to_api(deck_text: str, fmt: str) -> Dict[str, Any]:
         status_code = exc.response.status_code
         return {
             "status": "error",
-            "message": (
-                "Backend rejected text upload "
-                f"({status_code})"
-            ),
+            "message": (f"Backend rejected text upload ({status_code})"),
         }
     except Exception as exc:  # pylint: disable=broad-except
         logger.exception("Unexpected text upload failure")
@@ -301,14 +300,9 @@ def build_chat_ui_tab():
             return history, "", history
 
         context_note = (
-            f"Deck context: {int(deck_id)}"
-            if deck_id
-            else "No deck context provided"
+            f"Deck context: {int(deck_id)}" if deck_id else "No deck context provided"
         )
-        summary = (
-            "Message enqueued for WebSocket delivery."
-            f" {context_note}"
-        )
+        summary = f"Message enqueued for WebSocket delivery. {context_note}"
         # Chatbot expects (user, assistant) tuples
         history.append((message.strip(), summary))
         return history, "", history
@@ -362,6 +356,17 @@ def build_meta_dashboard_tab():
     )
 
 
+def validate_server_ready():
+    """Validate that the server components are properly initialized."""
+    try:
+        response = httpx.get(HEALTH_CHECK_URL, timeout=5.0)
+        if response.status_code != 200:
+            raise RuntimeError("FastAPI health check failed")
+        logger.info("Server validation successful")
+        return True
+    except Exception as exc:
+        logger.error(f"Server validation failed: {exc}")
+        return False
 
 
 def check_environment():
@@ -382,40 +387,40 @@ def check_environment():
         "KAGI_API_KEY": "High precision search",
         "GITHUB_API_KEY": "Repository-scope search",
     }
-    
+
     has_missing_required = False
-    
+
     for key, description in required_keys.items():
         if os.getenv(key):
             env_status[key] = "✓ Configured"
         else:
             env_status[key] = f"✗ Missing - {description}"
             has_missing_required = True
-    
+
     for key, description in optional_keys.items():
         if os.getenv(key):
             env_status[key] = "✓ Configured"
         else:
             env_status[key] = f"⚠ Not configured - {description}"
-    
+
     status_html = "<h3>Environment Configuration</h3><ul>"
     for key, status in env_status.items():
         status_html += f"<li><strong>{key}:</strong> {status}</li>"
     status_html += "</ul>"
-    
+
     if has_missing_required:
         status_html += (
             "<p style='color: red;'><strong>⚠ Warning:</strong> "
             "Some required API keys are missing. Configure them in the HF Space settings."  # noqa: E501
             "</p>"
         )
-    
+
     return status_html
 
 
 def create_gradio_interface():
     """Create the Gradio interface with tabs."""
-    
+
     # About content with Vawlrath's personality
     about_html = textwrap.dedent(
         f"""
@@ -555,17 +560,17 @@ def create_gradio_interface():
 </div>
         """
     )
-    
+
     # Environment status
     env_status_html = check_environment()
-    
+
     # Create the interface with tabs
     with gr.Blocks(
         title="Arena Improver - Vawlrathh's Deck Analysis",
     ) as interface:
         gr.Markdown("# Arena Improver - Vawlrathh, The Small'n")
         gr.Markdown("*Your deck's terrible. Let me show you how to fix it.*")
-        
+
         with gr.Tabs():
             with gr.Tab("API Documentation"):
                 docs_markdown = textwrap.dedent(
@@ -594,13 +599,13 @@ def create_gradio_interface():
                     """
                 )
                 gr.HTML(iframe_html)
-            
+
             with gr.Tab("About"):
                 gr.HTML(about_html)
-            
+
             with gr.Tab("Quick Start"):
                 gr.HTML(quick_start_html)
-            
+
             with gr.Tab("Status"):
                 gr.HTML(env_status_html)
                 troubleshooting_md = textwrap.dedent(
@@ -628,7 +633,7 @@ def create_gradio_interface():
 
             with gr.Tab("Meta Intelligence"):
                 build_meta_dashboard_tab()
-        
+
         footer_md = textwrap.dedent(
             f"""
             ---
@@ -645,7 +650,7 @@ def create_gradio_interface():
             """
         )
         gr.Markdown(footer_md)
-    
+
     return interface
 
 
@@ -653,25 +658,18 @@ def create_combined_app():
     """Create a combined FastAPI + Gradio application.
 
     Returns:
-        FastAPI: The combined application with Gradio mounted at root.
+        FastAPI: The combined application with Gradio mounted at /gradio subpath.
     """
-    # Import the FastAPI app from src.main
-    from src.main import app as fastapi_app
-
     # Create Gradio interface
     logger.info("Creating Gradio interface...")
     gradio_interface = create_gradio_interface()
 
-    # Mount Gradio onto FastAPI at root path
+    # Mount Gradio onto FastAPI at /gradio subpath
     # FastAPI routes remain at /api/v1/*, /docs, /health, etc.
-    # Gradio UI handles the root path for HF Spaces
-    combined_app = mount_gradio_app(
-        fastapi_app,
-        gradio_interface,
-        path="/"
-    )
+    # Gradio UI is accessible at /gradio for cleaner separation
+    combined_app = mount_gradio_app(fastapi_app, gradio_interface, path="/gradio")
 
-    logger.info("Gradio mounted on FastAPI at root path (/)")
+    logger.info("Gradio mounted on FastAPI at /gradio subpath")
     return combined_app
 
 
@@ -679,8 +677,11 @@ def create_combined_app():
 def get_app():
     return create_combined_app()
 
+
 # Create the app at module level for ASGI servers (e.g., uvicorn)
 app = get_app()
+
+
 def main():
     """Main entry point for the Hugging Face Space."""
     logger.info("=" * 60)
