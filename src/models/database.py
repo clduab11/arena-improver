@@ -1,6 +1,6 @@
 """Database models using SQLAlchemy."""
 
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from sqlalchemy import (
     Column,
     Integer,
@@ -25,7 +25,7 @@ def utcnow() -> datetime:
 
 
 class DeckModel(Base):
-    """SQLAlchemy model for decks."""
+    """SQLAlchemy model timezone.utc decks."""
     
     __tablename__ = "decks"
     
