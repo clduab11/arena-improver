@@ -32,7 +32,7 @@ faker==33.1.0                    # Fake data generation
 # ----------------------------------------------------------------------------
 ruff==0.9.3                      # Fast Python linter and formatter (replaces flake8, isort, black)
 mypy==1.13.0                     # Static type checker
-pylint==3.3.2                    # Traditional comprehensive linter
+pylint==3.3.9                    # Traditional comprehensive linter
 bandit==1.7.10                   # Security linter
 safety==3.7.0                    # Dependency vulnerability scanner
 pip-audit==2.7.3                 # Audit pip packages for vulnerabilities
