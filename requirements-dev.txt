@@ -54,7 +54,7 @@ sphinx-rtd-theme==3.0.2          # Read the Docs theme for Sphinx
 myst-parser==4.0.0               # Markdown parser for Sphinx
 sphinx-autodoc-typehints==2.5.0  # Type hints support for autodoc
 mkdocs==1.6.1                    # Alternative documentation tool
-mkdocs-material==9.5.48          # Material theme for MkDocs
+mkdocs-material==9.7.0          # Material theme for MkDocs
 
 # ----------------------------------------------------------------------------
 # Type Stubs
