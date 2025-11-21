@@ -32,7 +32,7 @@ jobs:
 
       - name: Check for existing review comment
         id: duplicate_guard
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const prNumber = context.payload.pull_request.number;
@@ -61,7 +61,7 @@ jobs:
 
       - name: Get PR details
         id: pr
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         if: ${{ !fromJson(steps.duplicate_guard.outputs.result).skip_duplicate }}
         with:
           script: |
@@ -115,7 +115,7 @@ jobs:
 
       - name: Post review summary
         if: ${{ !fromJson(steps.duplicate_guard.outputs.result).skip_duplicate }}
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         env:
           CLAUDE_HEAD_SHA: ${{ fromJson(steps.duplicate_guard.outputs.result).head_sha }}
         with:
