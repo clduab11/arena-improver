@@ -25,7 +25,7 @@ httpx==0.28.1
 # AI/ML
 openai==1.57.2
 anthropic==0.74.1
-sentence-transformers==3.3.1
+sentence-transformers==5.1.2
 torch==2.6.0
 
 # Testing
