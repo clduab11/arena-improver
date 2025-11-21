@@ -38,4 +38,4 @@ psutil==6.1.0
 
 # Hugging Face Space Integration
 gradio>=4.0.0
-huggingface-hub==0.36.0  # last pre-1.0 release that keeps CLI + downstream libs happy
+huggingface-hub==1.1.5  # last pre-1.0 release that keeps CLI + downstream libs happy
