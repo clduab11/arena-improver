@@ -74,9 +74,10 @@ def test_builders_render_without_errors():
         build_meta_dashboard_tab()
 
 
-def test_upload_text_validation_short_circuit():
+@pytest.mark.asyncio
+async def test_upload_text_validation_short_circuit():
     """Empty deck strings should not attempt HTTP calls."""
-    response = _upload_text_to_api("", "Standard")
+    response = await _upload_text_to_api("", "Standard")
     assert response["status"] == "error"
     assert "empty" in response["message"].lower()
 

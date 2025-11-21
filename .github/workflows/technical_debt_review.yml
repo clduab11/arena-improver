@@ -1,0 +1,148 @@
+name: Technical Debt Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - '**.py'
+      - 'pyproject.toml'
+      - 'requirements*.txt'
+
+permissions:
+  contents: read
+  pull-requests: write  # To comment on PRs if needed in future
+
+jobs:
+  check-async-patterns:
+    name: Check Async Patterns
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install ruff
+
+      - name: Check for AsyncClient instantiation anti-pattern
+        run: |
+          echo "Checking for httpx.AsyncClient() anti-pattern..."
+          
+          # Search for new AsyncClient instantiations (excluding tests and http_client.py)
+          VIOLATIONS=$(grep -rn "httpx\.AsyncClient()" \
+            --include="*.py" \
+            --exclude-dir=tests \
+            --exclude="http_client.py" \
+            src/ app.py || true)
+          
+          if [ -n "$VIOLATIONS" ]; then
+            echo "❌ Found httpx.AsyncClient() instantiations (anti-pattern):"
+            echo "$VIOLATIONS"
+            echo ""
+            echo "Use the shared HTTP client instead:"
+            echo "  from src.services.http_client import get_http_client"
+            echo "  client = await get_http_client()"
+            echo ""
+            echo "See docs/async_patterns.md for details."
+            exit 1
+          else
+            echo "✅ No AsyncClient instantiation anti-patterns found"
+          fi
+
+      - name: Check for missing await keywords
+        run: |
+          echo "Running ruff async checks..."
+          ruff check --select ASYNC src/ app.py || {
+            echo "❌ Async pattern violations found"
+            echo "See docs/async_patterns.md for best practices"
+            exit 1
+          }
+          echo "✅ No async violations found"
+
+      - name: Check for blocking calls in async functions
+        run: |
+          echo "Checking for blocking calls in async functions..."
+          
+          # Check for time.sleep in async functions
+          BLOCKING_CALLS=$(grep -rn "async def" \
+            --include="*.py" \
+            src/ app.py | \
+            grep -A 20 "time\.sleep" || true)
+          
+          if [ -n "$BLOCKING_CALLS" ]; then
+            echo "⚠️  Warning: Found time.sleep() calls near async functions"
+            echo "$BLOCKING_CALLS"
+            echo ""
+            echo "Use 'await asyncio.sleep()' in async functions instead"
+          else
+            echo "✅ No blocking sleep calls found in async context"
+          fi
+
+      - name: Verify shared client usage
+        run: |
+          echo "Verifying shared HTTP client usage..."
+          
+          # Count get_http_client usages
+          SHARED_CLIENT_COUNT=$(grep -r "get_http_client" \
+            --include="*.py" \
+            src/ | wc -l)
+          
+          echo "Found $SHARED_CLIENT_COUNT references to shared client"
+          
+          if [ "$SHARED_CLIENT_COUNT" -lt 1 ]; then
+            echo "⚠️  Warning: No usage of shared HTTP client found"
+            echo "Consider using get_http_client() for HTTP requests"
+          else
+            echo "✅ Shared HTTP client is being used"
+          fi
+
+  check-imports:
+    name: Check Import Quality
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install ruff
+
+      - name: Check for unused imports
+        run: |
+          echo "Checking for unused imports..."
+          ruff check --select F401 src/ app.py || {
+            echo "⚠️  Found unused imports"
+            echo "Run 'ruff check --fix' to auto-fix"
+            exit 0  # Warning only, don't fail
+          }
+          echo "✅ No unused imports found"
+
+  summary:
+    name: Review Summary
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    needs: [check-async-patterns, check-imports]
+    if: always()
+    steps:
+      - name: Check results
+        run: |
+          if [ "${{ needs.check-async-patterns.result }}" == "failure" ]; then
+            echo "❌ Async pattern check failed"
+            exit 1
+          fi
+          echo "✅ All technical debt checks passed"

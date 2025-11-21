@@ -1,8 +1,10 @@
 """Integration tests for Hugging Face Space wrapper."""
 
+import asyncio
 import subprocess
 import time
 import httpx
+import pytest
 
 
 def test_app_imports():
@@ -32,7 +34,8 @@ def test_environment_check():
     assert "ANTHROPIC_API_KEY" in html
 
 
-def test_fastapi_server_can_start():
+@pytest.mark.asyncio
+async def test_fastapi_server_can_start():
     """Test that FastAPI server can start and respond to health checks."""
     from app import start_fastapi_server, wait_for_fastapi_ready, kill_existing_uvicorn
     
@@ -45,13 +48,15 @@ def test_fastapi_server_can_start():
     
     try:
         # Wait for it to be ready
-        assert wait_for_fastapi_ready(max_wait=30), "FastAPI server did not become ready"
+        is_ready = await wait_for_fastapi_ready(max_wait=30)
+        assert is_ready, "FastAPI server did not become ready"
         
         # Test health endpoint
-        response = httpx.get("http://localhost:7860/health", timeout=5.0)
-        assert response.status_code == 200
-        data = response.json()
-        assert data["status"] == "healthy"
+        async with httpx.AsyncClient() as client:
+            response = await client.get("http://localhost:7860/health", timeout=5.0)
+            assert response.status_code == 200
+            data = response.json()
+            assert data["status"] == "healthy"
         
     finally:
         # Clean up

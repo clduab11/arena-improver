@@ -1,12 +1,15 @@
 """Pytest configuration and fixtures."""
 
 import os
+from unittest.mock import AsyncMock
 
 import httpx
 import pytest
 import pytest_asyncio
 
 from src.services.smart_sql import SmartSQLService
+from src.services.scryfall_service import ScryfallService
+from src.services.card_market_service import CardMarketService
 
 
 @pytest.fixture(scope="function")
@@ -64,3 +67,26 @@ async def api_client(api_base_url_setting: str):
             )
 
         yield client
+
+
+@pytest_asyncio.fixture
+async def mock_http_client():
+    """Mock HTTP client for testing without external API calls."""
+    client = AsyncMock(spec=httpx.AsyncClient)
+    return client
+
+
+@pytest_asyncio.fixture
+async def scryfall_service(mock_http_client):
+    """Scryfall service with mock HTTP client."""
+    service = ScryfallService()
+    service._client = mock_http_client  # Inject mock client
+    async with service as svc:
+        yield svc
+
+
+@pytest_asyncio.fixture
+async def card_market_service(scryfall_service):
+    """Card market service with mocked dependencies."""
+    async with CardMarketService(scryfall_service=scryfall_service) as service:
+        yield service

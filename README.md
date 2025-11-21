@@ -393,12 +393,35 @@ Already set up in `mcp_config.json`. Don't touch it unless you know what you're 
 
 ## 📚 Documentation
 
-- **[HF Deployment Guide](docs/HF_DEPLOYMENT.md)**: Hugging Face Space setup and configuration
-- **[Hackathon Features](docs/HACKATHON_FEATURES.md)**: Complete feature breakdown
-- **[Steam Arena Guide](docs/STEAM_ARENA_GUIDE.md)**: Platform-specific help
-- **[MCP Security](docs/MCP_SECURITY.md)**: Security best practices
-- **[API Docs](http://localhost:8000/docs)**: Interactive API documentation (when running locally)
-- **[Live API Docs](https://huggingface.co/spaces/MCP-1st-Birthday/vawlrath)**: Try the API in the HF Space
+### Quick Start & Overview (Root Directory)
+- **[DEPLOYMENT.md](DEPLOYMENT.md)** - Complete deployment guide for all environments
+- **[CLAUDE.md](CLAUDE.md)** - Claude AI integration and code review workflows  
+- **[CHANGELOG.md](CHANGELOG.md)** - Version history and release notes
+
+### Technical Documentation (docs/ Directory)
+
+**Architecture & Development:**
+- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - System architecture, async patterns, connection pooling
+- **[async_patterns.md](docs/async_patterns.md)** - Async/await best practices and patterns
+
+**Deployment & Operations:**
+- **[HF_DEPLOYMENT.md](docs/HF_DEPLOYMENT.md)** - HuggingFace Space deployment, troubleshooting, monitoring
+- **[SECRETS_CHECKLIST.md](docs/SECRETS_CHECKLIST.md)** - API key management and security
+
+**Features & Guides:**
+- **[PRIORITY_IMPLEMENTATION_GUIDE.md](docs/PRIORITY_IMPLEMENTATION_GUIDE.md)** - MCP protocol implementation
+- **[STEAM_ARENA_GUIDE.md](docs/STEAM_ARENA_GUIDE.md)** - Export decks from Steam Arena
+- **[HACKATHON_FEATURES.md](docs/HACKATHON_FEATURES.md)** - MCP 1st Birthday hackathon features
+- **[MCP_SECURITY.md](docs/MCP_SECURITY.md)** - Security best practices
+
+**Live API Documentation:**
+- **[Local API Docs](http://localhost:8000/docs)** - Interactive API docs (when running locally)
+- **[HF Space API Docs](https://huggingface.co/spaces/MCP-1st-Birthday/vawlrath)** - Try the API live
+
+### Documentation Hierarchy
+- **Root docs** (DEPLOYMENT.md, CLAUDE.md): High-level overviews and quick starts
+- **docs/ directory**: Detailed technical guides, architecture, and specific topics
+- **Cross-references**: Documents link to each other for easy navigation
 
 ---
 

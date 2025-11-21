@@ -67,16 +67,41 @@ class CardMarketInfo:
 
 
 class CardMarketService:
-    """Service for fetching card pricing and vendor information."""
+    """Service for fetching card pricing and vendor information.
+    
+    Uses async context manager for proper lifecycle management of dependencies.
+    """
 
     def __init__(self, scryfall_service: Optional[ScryfallService] = None):
         """
         Initialize card market service.
 
         Args:
-            scryfall_service: Optional ScryfallService instance
+            scryfall_service: Optional ScryfallService instance (deferred creation)
         """
-        self.scryfall = scryfall_service or ScryfallService()
+        self.scryfall = scryfall_service
+
+    async def __aenter__(self):
+        """Async context manager entry - ensures Scryfall service is initialized."""
+        if not self.scryfall:
+            self.scryfall = ScryfallService()
+        # Only enter context if not already entered
+        if not getattr(self.scryfall, "_entered", False):
+            await self.scryfall.__aenter__()
+            setattr(self.scryfall, "_entered", True)
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit - properly closes Scryfall service."""
+        if self.scryfall and getattr(self.scryfall, "_entered", False):
+            await self.scryfall.__aexit__(exc_type, exc_val, exc_tb)
+            setattr(self.scryfall, "_entered", False)
+        return False
+
+    async def close(self):
+        """Explicitly close the Scryfall service."""
+        if self.scryfall:
+            await self.scryfall.close()
 
     async def get_card_market_info(
         self,

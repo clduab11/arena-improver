@@ -149,101 +149,28 @@ pytest --cov=src tests/
 
 ## HuggingFace Space Deployment
 
-### Overview
+> **📖 Complete Guide**: See [docs/HF_DEPLOYMENT.md](docs/HF_DEPLOYMENT.md) for detailed HuggingFace Space deployment instructions, including token setup, manual sync procedures, troubleshooting, and monitoring.
 
-Arena Improver auto-syncs from GitHub to HuggingFace Space on every push to the `main` branch.
+### Quick Overview
+
+Arena Improver can be deployed to HuggingFace Spaces for public access.
 
 **Live Space**: https://huggingface.co/spaces/MCP-1st-Birthday/vawlrath
 
-### One-Time Setup
+### Key Features
 
-#### Step 1: Get HuggingFace Token (2 minutes)
+- **Dual-Port Architecture**: FastAPI (7860) + Gradio UI (7861)
+- **Auto-Restart**: HuggingFace automatically restarts on crashes
+- **Environment Secrets**: Configure API keys via Space settings
+- **Manual Sync**: Use `hf upload --create-pr` for deployments
 
-1. Visit: https://huggingface.co/settings/tokens
-2. Click **"New token"**
-3. Name: `arena-improver-sync`
-4. Permissions: **"Write"** ✅
-5. Click **"Generate token"**
-6. **Copy the token** (you won't see it again!)
+### Essential Steps
 
-#### Step 2: Add to GitHub Secrets (2 minutes)
+1. **Get HF Token**: Visit [HuggingFace Tokens](https://huggingface.co/settings/tokens) and create a write token
+2. **Configure Secrets**: Add required API keys (OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.) in Space settings
+3. **Deploy**: Use `hf upload --create-pr` to sync code changes
 
-1. Visit: https://github.com/clduab11/arena-improver/settings/secrets/actions
-2. Click **"New repository secret"**
-3. Name: `HF_TOKEN`
-4. Value: Paste your token from Step 1
-5. Click **"Add secret"**
-
-#### Step 3: Configure HF Space API Keys (3 minutes)
-
-1. Visit: https://huggingface.co/spaces/MCP-1st-Birthday/vawlrath/settings
-2. Scroll to **"Repository secrets"**
-3. Add these secrets:
-
-| Secret Name | Required | Get From |
-|-------------|----------|----------|
-| `OPENAI_API_KEY` | ✅ Yes | https://platform.openai.com/api-keys |
-| `ANTHROPIC_API_KEY` | ✅ Yes | https://console.anthropic.com/ |
-| `TAVILY_API_KEY` | ⚠️ Recommended | https://tavily.com/ |
-| `EXA_API_KEY` | ⚠️ Recommended | https://exa.ai/ |
-
-### Deployment Workflow
-
-#### Automatic Deployment
-
-Every push to `main` triggers automatic sync:
-
-```bash
-git push origin main
-```
-
-GitHub Actions will:
-1. Checkout the code
-2. Push to HuggingFace Space
-3. HF Space will automatically restart
-4. FastAPI starts on port 7860
-5. Gradio starts on port 7861
-
-#### Manual Deployment
-
-Trigger a manual sync:
-
-1. Visit: https://github.com/clduab11/arena-improver/actions/workflows/sync-to-hf.yml
-2. Click **"Run workflow"**
-3. Select branch: `main`
-4. Click **"Run workflow"**
-
-### Verification
-
-After deployment:
-
-1. **Check Sync Status**: https://github.com/clduab11/arena-improver/actions
-2. **Visit Space**: https://huggingface.co/spaces/MCP-1st-Birthday/vawlrath
-3. **Check Status Tab**: Should show all API keys as "✓ Configured"
-4. **Test API**: Try the "API Documentation" tab
-
-### Architecture
-
-The HF Space runs two servers:
-
-```
-┌─────────────────────────────────────┐
-│   Gradio UI (Port 7861)             │
-│   ├─ API Documentation Tab          │
-│   ├─ About Tab                      │
-│   ├─ Quick Start Tab                │
-│   └─ Status Tab                     │
-└──────────────┬──────────────────────┘
-               │
-               ▼
-┌─────────────────────────────────────┐
-│   FastAPI Server (Port 7860)        │
-│   ├─ /health                        │
-│   ├─ /docs (Interactive API)        │
-│   ├─ /api/v1/ws/chat/* (WebSocket)  │
-│   └─ /api/v1/* (All endpoints)      │
-└─────────────────────────────────────┘
-```
+**For complete instructions, troubleshooting, and monitoring**, see [docs/HF_DEPLOYMENT.md](docs/HF_DEPLOYMENT.md).
 
 ---
 

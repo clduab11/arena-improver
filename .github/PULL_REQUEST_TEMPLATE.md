@@ -78,6 +78,15 @@ Related to #
 - [ ] My changes generate no new warnings
 - [ ] I have added type hints to new functions/methods
 
+### Async Patterns (for HTTP/IO changes)
+
+- [ ] No new `httpx.AsyncClient()` instantiations (use `await get_http_client()` instead)
+- [ ] All async functions properly use `await` keywords
+- [ ] No `time.sleep()` in async functions (use `await asyncio.sleep()` instead)
+- [ ] Services use async context managers (`__aenter__`/`__aexit__`) when appropriate
+- [ ] Connection pooling is utilized via shared HTTP client
+- [ ] I have read [docs/async_patterns.md](../docs/async_patterns.md)
+
 ### Testing
 
 - [ ] I have added tests that prove my fix is effective or that my feature works

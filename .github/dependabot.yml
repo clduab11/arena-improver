@@ -1,0 +1,44 @@
+version: 2
+
+updates:
+  # Python dependencies
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "python"
+    groups:
+      testing:
+        patterns:
+          - "pytest*"
+          - "coverage"
+          - "faker"
+          - "hypothesis"
+      docs:
+        patterns:
+          - "sphinx*"
+          - "mkdocs*"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "clduab11"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "clduab11"
+    commit-message:
+      prefix: "ci"

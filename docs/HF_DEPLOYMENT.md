@@ -313,6 +313,272 @@ python -m pytest tests/
 uvicorn src.main:app --port 8000
 ```
 
+## 🔧 Troubleshooting
+
+### HuggingFace CLI Issues
+
+#### Problem: `hf upload` fails with authentication error
+**Solution:**
+```bash
+# Check if token is set
+echo $HF_TOKEN | head -c 10  # Should show first 10 chars
+
+# Re-authenticate
+huggingface-cli login --token $HF_TOKEN
+
+# Verify authentication
+huggingface-cli whoami
+```
+
+#### Problem: "Direct push blocked" error
+**Solution:**
+The Space security settings prevent direct pushes. Always use `--create-pr`:
+```bash
+hf upload MCP-1st-Birthday/vawlrathh . --repo-type=space --create-pr
+```
+
+#### Problem: CLI not found or not installed
+**Solution:**
+```bash
+# Install/upgrade huggingface_hub
+pip install --upgrade huggingface_hub[cli]
+
+# Verify installation
+hf --version
+```
+
+### Space Runtime Issues
+
+#### Problem: Space shows "Building..." indefinitely
+**Solutions:**
+1. Check build logs in Space settings
+2. Verify `requirements.txt` is valid
+3. Check for conflicting dependencies
+4. Review `app.py` for syntax errors
+
+#### Problem: FastAPI server not starting
+**Solutions:**
+1. Check logs: Go to Space → Logs tab
+2. Verify port 7860 is used (HF Spaces default)
+3. Check environment variables are set
+4. Review src/main.py for startup errors
+
+#### Problem: Gradio UI shows "Connection Error"
+**Solutions:**
+1. Ensure FastAPI is running on port 7860
+2. Check `wait_for_fastapi_ready()` timeout
+3. Verify health endpoint returns 200: `/health`
+4. Check Space logs for FastAPI errors
+
+### API Key Issues
+
+#### Problem: "OPENAI_API_KEY not found" error
+**Solution:**
+1. Go to Space settings → Repository secrets
+2. Add `OPENAI_API_KEY` with your key
+3. Restart the Space (Settings → Factory reboot)
+4. Verify in Status tab that key shows "✓ Configured"
+
+#### Problem: API calls fail with 401/403 errors
+**Solutions:**
+1. Verify API keys are valid and not expired
+2. Check API key permissions (some keys are read-only)
+3. Review Space logs for specific API error messages
+4. Test keys locally first before deploying
+
+### Connection Pooling Issues
+
+#### Problem: "Too many connections" error
+**Solution:**
+The shared HTTP client limits connections to 100. If you see this:
+1. Check for connection leaks in code
+2. Verify async context managers are used properly
+3. Review `src/services/http_client.py` limits
+4. Consider increasing `max_connections` if needed
+
+#### Problem: Slow API responses
+**Solutions:**
+1. Connection pooling should improve performance by 20%+
+2. Check rate limiting is working (Scryfall: 100ms delay)
+3. Verify shared client is initialized in lifespan
+4. Monitor logs for "HTTPClientManager" initialization messages
+
+## 📊 Monitoring
+
+### Accessing Logs
+
+**Real-time logs:**
+1. Go to your Space: https://huggingface.co/spaces/MCP-1st-Birthday/vawlrathh
+2. Click "Logs" tab
+3. View stdout/stderr in real-time
+
+**Search logs:**
+```bash
+# Filter for errors
+grep -i "error" logs.txt
+
+# Filter for specific service
+grep "ScryfallService" logs.txt
+
+# Check HTTP client initialization
+grep "HTTPClientManager" logs.txt
+```
+
+### Auto-Restart Behavior
+
+HuggingFace Spaces automatically restart on:
+- Crashes or unhandled exceptions
+- Out of memory errors
+- Network failures
+- Build failures (after code updates)
+
+**Restart indicators:**
+- Space status shows "Building..." then "Running"
+- Logs show "Application startup complete"
+- Health endpoint returns 200
+
+**Manual restart:**
+1. Go to Space settings
+2. Click "Factory reboot"
+3. Wait for rebuild (~2-5 minutes)
+
+### Health Monitoring
+
+**Endpoints to monitor:**
+
+```bash
+# Basic health check
+curl https://huggingface.co/proxy/7860/health
+
+# Readiness check (database + dependencies)
+curl https://huggingface.co/proxy/7860/health/ready
+
+# Liveness check (process status)
+curl https://huggingface.co/proxy/7860/health/live
+```
+
+**Expected responses:**
+```json
+{
+  "status": "healthy",
+  "timestamp": "2024-11-18T...",
+  "version": "0.1.0"
+}
+```
+
+### Performance Metrics
+
+**Monitor these in logs:**
+- HTTP connection pool usage: Look for "max_connections" warnings
+- Rate limiting delays: Scryfall calls should wait 100ms
+- Response times: API calls should complete in <5s
+- Memory usage: Should stay under Space limits
+
+**Log patterns to watch:**
+```
+✅ Good: "HTTPClientManager: Shared client initialized"
+✅ Good: "Application startup complete"
+❌ Bad: "RuntimeError: HTTPClientManager not initialized"
+❌ Bad: "Too many connections"
+❌ Bad: "Rate limit exceeded"
+```
+
+## 🔄 Rollback Procedures
+
+### Rollback to Previous Version
+
+If a deployment breaks the Space:
+
+**Method 1: Revert Git Commit**
+```bash
+# Find the last working commit
+git log --oneline -10
+
+# Revert to that commit
+git revert <commit-sha>
+
+# Push revert
+git push origin main
+
+# Sync to HF
+hf upload MCP-1st-Birthday/vawlrathh . --repo-type=space --create-pr
+```
+
+**Method 2: Manual File Restore**
+```bash
+# Checkout specific file from previous commit
+git checkout <commit-sha> -- path/to/file.py
+
+# Commit and deploy
+git commit -m "Rollback file to working version"
+hf upload MCP-1st-Birthday/vawlrathh . --repo-type=space --create-pr
+```
+
+**Method 3: HuggingFace Git History**
+1. Go to Space → Files and versions
+2. Click "History"
+3. Find last working commit
+4. Click "Restore this version"
+5. Confirm restoration
+
+## 📐 Architecture Diagram
+
+The HF Space runs a dual-server architecture:
+
+```
+┌────────────────────────────────────────────────────────┐
+│  Hugging Face Space (Public)                           │
+│  https://huggingface.co/spaces/.../vawlrathh           │
+└────────────────┬───────────────────────────────────────┘
+                 │
+    ┌────────────┴───────────────┐
+    │                            │
+    ▼                            ▼
+┌─────────────────────┐   ┌─────────────────────┐
+│ FastAPI (Port 7860) │   │ Gradio (Port 7861)  │
+│ ─────────────────── │   │ ───────────────────  │
+│ • REST API          │◄──┤ • UI Tabs           │
+│ • WebSocket Chat    │   │ • Button Handlers   │
+│ • Database          │   │ • File Uploads      │
+│ • Services          │   │ • Status Display    │
+│ • HTTP Client Pool  │   │                     │
+└──────┬──────────────┘   └─────────────────────┘
+       │
+       │ Lifespan Events
+       ▼
+┌─────────────────────┐
+│  HTTPClientManager  │
+│  ─────────────────  │
+│  • Connection Pool  │
+│  • 100 max conns    │
+│  • 20 keepalive     │
+│  • Shared across    │
+│    all services     │
+└──────┬──────────────┘
+       │
+       │ Uses shared client
+       ▼
+┌─────────────────────┐
+│  Service Layer      │
+│  ─────────────────  │
+│  • ScryfallService  │
+│  • CardMarketSvc    │
+│  • SmartSQLService  │
+│  • ChatAgent        │
+└─────────────────────┘
+```
+
+**Port Configuration:**
+- **7860**: FastAPI backend (HF Spaces default)
+- **7861**: Gradio frontend (custom)
+
+**Connection Flow:**
+1. User accesses Gradio UI (port 7861)
+2. UI makes HTTP calls to FastAPI (port 7860)
+3. FastAPI uses shared HTTP client for external APIs
+4. Connection pooling reuses TCP connections
+5. Rate limiting coordinates API calls
+
 ## 📚 Additional Resources
 
 - [Hugging Face Spaces Documentation](https://huggingface.co/docs/hub/spaces)
@@ -320,6 +586,7 @@ uvicorn src.main:app --port 8000
 - [FastAPI Documentation](https://fastapi.tiangolo.com/)
 - [MCP Protocol Documentation](https://modelcontextprotocol.io/)
 - [Arena Improver GitHub Repo](https://github.com/clduab11/arena-improver)
+- [Async Patterns Guide](async_patterns.md)
 
 ## 🎖️ MCP 1st Birthday Hackathon
 
@@ -330,6 +597,7 @@ This project is part of the [MCP 1st Birthday Hackathon](https://huggingface.co/
 - Dual AI system with consensus checking
 - Physical card purchase integration
 - Sequential reasoning capabilities
+- Async HTTP client with connection pooling
 
 ---
 

@@ -13,6 +13,7 @@ FastAPI endpoints are available at /api/v1/*, /docs, /health, etc.
 
 # pylint: disable=no-member
 
+import asyncio
 import json
 import logging
 import os
@@ -32,8 +33,29 @@ from src.main import app as fastapi_app
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# HF Space configuration - single port for both FastAPI and Gradio
-APP_PORT = 7860  # HF Spaces only exposes port 7860
+# Module-level shared HTTP client for async handlers with connection pooling
+client: Optional[httpx.AsyncClient] = None
+
+
+async def get_shared_client() -> httpx.AsyncClient:
+    """Get or create shared HTTP client with connection pooling.
+    
+    Returns:
+        httpx.AsyncClient: Shared client instance with connection pooling
+    """
+    global client
+    if not client:
+        client = httpx.AsyncClient(
+            timeout=60.0,
+            limits=httpx.Limits(max_keepalive_connections=10)
+        )
+    return client
+
+# HF Space configuration
+FASTAPI_PORT = 7860  # HF Spaces expect main app on 7860
+GRADIO_PORT = 7861   # Gradio interface on different port
+HEALTH_CHECK_URL = f"http://localhost:{FASTAPI_PORT}/health"
+DOCS_URL = f"/proxy/{FASTAPI_PORT}/docs"  # HF Space proxy pattern
 REPO_URL = "https://github.com/clduab11/arena-improver"
 HACKATHON_URL = "https://huggingface.co/MCP-1st-Birthday"
 HF_DEPLOYMENT_GUIDE_URL = f"{REPO_URL}/blob/main/docs/HF_DEPLOYMENT.md"
@@ -86,8 +108,8 @@ def builder_registry(
     return decorator
 
 
-def _upload_csv_to_api(file_path: Optional[str]) -> Dict[str, Any]:
-    """Upload a CSV file to the FastAPI backend with defensive logging."""
+async def _upload_csv_to_api(file_path: Optional[str]) -> Dict[str, Any]:
+    """Upload a CSV file to the FastAPI backend with defensive logging (async)."""
 
     if not file_path:
         return {"status": "error", "message": "No CSV file selected"}
@@ -97,7 +119,8 @@ def _upload_csv_to_api(file_path: Optional[str]) -> Dict[str, Any]:
             files = {
                 "file": (os.path.basename(file_path), file_handle, "text/csv"),
             }
-            response = httpx.post(
+            shared_client = await get_shared_client()
+            response = await shared_client.post(
                 f"{API_BASE_URL}/api/v1/upload/csv",
                 files=files,
                 timeout=60,
@@ -118,15 +141,16 @@ def _upload_csv_to_api(file_path: Optional[str]) -> Dict[str, Any]:
         return {"status": "error", "message": str(exc)}
 
 
-def _upload_text_to_api(deck_text: str, fmt: str) -> Dict[str, Any]:
-    """Upload Arena text export to the FastAPI backend."""
+async def _upload_text_to_api(deck_text: str, fmt: str) -> Dict[str, Any]:
+    """Upload Arena text export to the FastAPI backend (async)."""
 
     if not deck_text or not deck_text.strip():
         return {"status": "error", "message": "Deck text is empty"}
 
     payload = {"deck_string": deck_text, "format": fmt}
     try:
-        response = httpx.post(
+        shared_client = await get_shared_client()
+        response = await shared_client.post(
             f"{API_BASE_URL}/api/v1/upload/text",
             json=payload,
             timeout=60,
@@ -145,11 +169,12 @@ def _upload_text_to_api(deck_text: str, fmt: str) -> Dict[str, Any]:
         return {"status": "error", "message": str(exc)}
 
 
-def _fetch_meta_snapshot(game_format: str) -> Dict[str, Any]:
-    """Fetch meta intelligence for a specific format."""
+async def _fetch_meta_snapshot(game_format: str) -> Dict[str, Any]:
+    """Fetch meta intelligence for a specific format (async)."""
 
     try:
-        response = httpx.get(
+        shared_client = await get_shared_client()
+        response = await shared_client.get(
             f"{API_BASE_URL}/api/v1/meta/{game_format}",
             timeout=60,
         )
@@ -166,14 +191,15 @@ def _fetch_meta_snapshot(game_format: str) -> Dict[str, Any]:
         return {"status": "error", "message": str(exc)}
 
 
-def _fetch_memory_summary(deck_id: Optional[float]) -> Dict[str, Any]:
-    """Fetch Smart Memory stats for the supplied deck id."""
+async def _fetch_memory_summary(deck_id: Optional[float]) -> Dict[str, Any]:
+    """Fetch Smart Memory stats for the supplied deck id (async)."""
 
     if not deck_id:
         return {"status": "error", "message": "Deck ID required"}
 
     try:
-        response = httpx.get(
+        shared_client = await get_shared_client()
+        response = await shared_client.get(
             f"{API_BASE_URL}/api/v1/stats/{int(deck_id)}",
             timeout=60,
         )
@@ -221,9 +247,9 @@ def build_deck_uploader_tab():
         csv_input = gr.File(file_types=[".csv"], label="Arena CSV Export")
         upload_btn = gr.Button("Upload CSV", variant="primary")
 
-    def handle_csv_upload(uploaded_file, previous_id):
+    async def handle_csv_upload(uploaded_file, previous_id):
         file_path = getattr(uploaded_file, "name", None)
-        payload = _upload_csv_to_api(file_path)
+        payload = await _upload_csv_to_api(file_path)
         deck_id = payload.get("deck_id") or previous_id
         return payload, deck_id, deck_id
 
@@ -246,8 +272,8 @@ def build_deck_uploader_tab():
     )
     text_upload_btn = gr.Button("Upload Text", variant="secondary")
 
-    def handle_text_upload(deck_text, fmt, previous_id):
-        payload = _upload_text_to_api(deck_text, fmt)
+    async def handle_text_upload(deck_text, fmt, previous_id):
+        payload = await _upload_text_to_api(deck_text, fmt)
         deck_id = payload.get("deck_id") or previous_id
         return payload, deck_id, deck_id
 
@@ -359,14 +385,62 @@ def build_meta_dashboard_tab():
 def validate_server_ready():
     """Validate that the server components are properly initialized."""
     try:
-        response = httpx.get(HEALTH_CHECK_URL, timeout=5.0)
-        if response.status_code != 200:
-            raise RuntimeError("FastAPI health check failed")
-        logger.info("Server validation successful")
-        return True
-    except Exception as exc:
-        logger.error(f"Server validation failed: {exc}")
-        return False
+        # Start uvicorn as a subprocess
+        process = subprocess.Popen(
+            [
+                sys.executable, "-m", "uvicorn",
+                "src.main:app",
+                "--host", "0.0.0.0",
+                "--port", str(FASTAPI_PORT),
+                "--log-level", "info",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+
+        logger.info("FastAPI server started with PID %s", process.pid)
+        return process
+    except (OSError, subprocess.SubprocessError) as exc:
+        logger.error("Failed to start FastAPI server: %s", exc)
+        raise
+
+
+async def wait_for_fastapi_ready(max_wait=60, check_interval=2):
+    """Wait for FastAPI server to be ready by checking health endpoint (async).
+    
+    Args:
+        max_wait: Maximum time to wait in seconds
+        check_interval: Time between health checks in seconds
+    
+    Returns:
+        bool: True if server is ready, False otherwise
+    """
+    logger.info("Waiting for FastAPI server to be ready...")
+    start_time = time.time()
+    
+    shared_client = await get_shared_client()
+    
+    while time.time() - start_time < max_wait:
+        try:
+            response = await shared_client.get(HEALTH_CHECK_URL, timeout=5.0)
+            if response.status_code == 200:
+                logger.info("FastAPI server is ready!")
+                return True
+        except (httpx.ConnectError, httpx.TimeoutException):
+            logger.info(
+                "Server not ready yet, waiting %s seconds...",
+                check_interval,
+            )
+            await asyncio.sleep(check_interval)
+        except httpx.HTTPError as exc:
+            logger.warning("Health check error: %s", exc)
+            await asyncio.sleep(check_interval)
+    
+    logger.error(
+        "FastAPI server did not become ready within %s seconds",
+        max_wait,
+    )
+    return False
 
 
 def check_environment():
@@ -687,16 +761,51 @@ def main():
     logger.info("=" * 60)
     logger.info("Arena Improver - Hugging Face Space")
     logger.info("=" * 60)
-    logger.info("Starting combined FastAPI + Gradio server on port %s", APP_PORT)
-    logger.info("=" * 60)
-
-    # Launch the combined app with uvicorn
-    uvicorn.run(
-        "app:app",
-        host="0.0.0.0",
-        port=APP_PORT,
-        log_level="info",
-    )
+    
+    # Start FastAPI server
+    try:
+        fastapi_process = start_fastapi_server()
+    except (OSError, subprocess.SubprocessError) as exc:
+        logger.error("Failed to start FastAPI server: %s", exc)
+        sys.exit(1)
+    
+    # Wait for FastAPI to be ready
+    if not asyncio.run(wait_for_fastapi_ready(max_wait=60)):
+        logger.error("FastAPI server failed to start. Check logs above.")
+        fastapi_process.terminate()
+        try:
+            fastapi_process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            logger.warning(
+                "FastAPI process did not terminate gracefully; forcing kill",
+            )
+            fastapi_process.kill()
+            fastapi_process.wait()
+        sys.exit(1)
+    
+    # Create and launch Gradio interface
+    try:
+        logger.info("Creating Gradio interface...")
+        interface = create_gradio_interface()
+        
+        logger.info("Launching Gradio on port %s...", GRADIO_PORT)
+        logger.info("=" * 60)
+        
+        # Launch Gradio
+        interface.launch(
+            server_name="0.0.0.0",
+            server_port=GRADIO_PORT,
+            share=False,
+            show_error=True
+        )
+    except (OSError, RuntimeError) as exc:
+        logger.error("Failed to launch Gradio interface: %s", exc)
+        fastapi_process.kill()
+        sys.exit(1)
+    finally:
+        # Cleanup shared client
+        if client:
+            asyncio.run(client.aclose())
 
 
 if __name__ == "__main__":
