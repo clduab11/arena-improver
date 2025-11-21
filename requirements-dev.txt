@@ -69,7 +69,7 @@ types-redis==4.6.0.20241004      # Type stubs for redis
 ipython==8.30.0                  # Enhanced interactive Python shell
 ipdb==0.13.13                    # IPython debugger
 pre-commit==4.0.1                # Git pre-commit hooks framework
-commitizen==4.1.0                # Conventional commits tool
+commitizen==4.10.0                # Conventional commits tool
 bumpversion==0.6.0               # Version bumping tool
 
 # ----------------------------------------------------------------------------
