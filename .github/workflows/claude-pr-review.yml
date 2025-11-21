@@ -154,7 +154,7 @@ jobs:
 
       - name: Upload review artifacts
         if: ${{ !fromJson(steps.duplicate_guard.outputs.result).skip_duplicate && always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: claude-review-${{ github.run_number }}
           path: |
