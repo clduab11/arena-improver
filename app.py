@@ -40,6 +40,45 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# -----------------------------------------------------------------------------
+# GPU / Spaces Configuration
+# -----------------------------------------------------------------------------
+try:
+    import spaces
+    HF_SPACE_ENVIRONMENT = True
+except ImportError:
+    # Create a dummy decorator for local development
+    class spaces:
+        @staticmethod
+        def GPU(duration=60):
+            def decorator(func):
+                return func
+            return decorator
+    HF_SPACE_ENVIRONMENT = False
+
+
+@spaces.GPU(duration=10)
+def initialize_gpu():
+    """Initialize GPU runtime for HF Spaces ZERO.
+    
+    This function exists primarily to satisfy the ZeroGPU requirement that
+    at least one function must be decorated with @spaces.GPU.
+    """
+    import torch
+    if torch.cuda.is_available():
+        device = torch.cuda.get_device_name(0)
+        logger.info(f"GPU initialized: {device}")
+        return {"gpu": device, "cuda_available": True}
+    return {"gpu": None, "cuda_available": False}
+
+# Initialize GPU if running in a Spaces environment
+if HF_SPACE_ENVIRONMENT:
+    try:
+        gpu_info = initialize_gpu()
+        logger.info(f"GPU initialization result: {gpu_info}")
+    except Exception as e:
+        logger.warning(f"GPU initialization failed (running on CPU): {e}")
+
 # Try to import the main FastAPI app
 try:
     from src.main import app as fastapi_app
@@ -145,6 +184,7 @@ def builder_registry(
     return decorator
 
 
+@spaces.GPU(duration=60)
 async def _upload_csv_to_api(file_path: Optional[str]) -> Dict[str, Any]:
     """Upload a CSV file to the FastAPI backend with defensive logging (async)."""
 
@@ -178,6 +218,7 @@ async def _upload_csv_to_api(file_path: Optional[str]) -> Dict[str, Any]:
         return {"status": "error", "message": str(exc)}
 
 
+@spaces.GPU(duration=60)
 async def _upload_text_to_api(deck_text: str, fmt: str) -> Dict[str, Any]:
     """Upload Arena text export to the FastAPI backend (async)."""
 
