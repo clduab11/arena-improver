@@ -671,18 +671,18 @@ def create_combined_app():
     """Create a combined FastAPI + Gradio application.
 
     Returns:
-        FastAPI: The combined application with Gradio mounted at /gradio subpath.
+        FastAPI: The combined application with Gradio mounted at root path.
     """
     # Create Gradio interface
     logger.info("Creating Gradio interface...")
     gradio_interface = create_gradio_interface()
 
-    # Mount Gradio onto FastAPI at /gradio subpath
+    # Mount Gradio onto FastAPI at root path
     # FastAPI routes remain at /api/v1/*, /docs, /health, etc.
-    # Gradio UI is accessible at /gradio for cleaner separation
-    combined_app = mount_gradio_app(fastapi_app, gradio_interface, path="/gradio")
+    # Gradio UI is accessible at root path for HF Spaces compatibility
+    combined_app = mount_gradio_app(fastapi_app, gradio_interface, path="/")
 
-    logger.info("Gradio mounted on FastAPI at /gradio subpath")
+    logger.info("Gradio mounted on FastAPI at root path")
     return combined_app
 
 
