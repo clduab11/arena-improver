@@ -303,7 +303,7 @@ def build_chat_ui_tab():
 
     gr.Markdown("## Chat with Vawlrathh")
     connection_status = gr.JSON(label="WebSocket Status", value={})
-    chatbot = gr.Chatbot(label="Live Conversation", type="messages")
+    chatbot = gr.Chatbot(label="Live Conversation")
     chat_history_state = gr.State(value=[])
     message_box = gr.Textbox(
         label="Message",
@@ -329,9 +329,8 @@ def build_chat_ui_tab():
             f"Deck context: {int(deck_id)}" if deck_id else "No deck context provided"
         )
         summary = f"Message enqueued for WebSocket delivery. {context_note}"
-        # Chatbot expects messages format
-        history.append({"role": "user", "content": message.strip()})
-        history.append({"role": "assistant", "content": summary})
+        # Chatbot expects (user, assistant) tuples
+        history.append((message.strip(), summary))
         return history, "", history
 
     send_btn.click(  # pylint: disable=no-member
