@@ -17,7 +17,10 @@ import asyncio
 import json
 import logging
 import os
+import subprocess
+import sys
 import textwrap
+import time
 import uuid
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
@@ -51,11 +54,8 @@ async def get_shared_client() -> httpx.AsyncClient:
         )
     return client
 
-# HF Space configuration
-FASTAPI_PORT = 7860  # HF Spaces expect main app on 7860
-GRADIO_PORT = 7861   # Gradio interface on different port
-HEALTH_CHECK_URL = f"http://localhost:{FASTAPI_PORT}/health"
-DOCS_URL = f"/proxy/{FASTAPI_PORT}/docs"  # HF Space proxy pattern
+# HF Space configuration - single port for both FastAPI and Gradio
+FASTAPI_PORT = 7860  # HF Spaces only exposes port 7860
 REPO_URL = "https://github.com/clduab11/arena-improver"
 HACKATHON_URL = "https://huggingface.co/MCP-1st-Birthday"
 HF_DEPLOYMENT_GUIDE_URL = f"{REPO_URL}/blob/main/docs/HF_DEPLOYMENT.md"
@@ -63,11 +63,11 @@ HF_DEPLOYMENT_GUIDE_URL = f"{REPO_URL}/blob/main/docs/HF_DEPLOYMENT.md"
 # for internal communication between Gradio frontend and FastAPI backend
 API_BASE_URL = os.getenv(
     "FASTAPI_BASE_URL",
-    f"http://localhost:{APP_PORT}",
+    f"http://localhost:{FASTAPI_PORT}",
 )  # For REST API calls
 WS_BASE_URL = os.getenv(
     "FASTAPI_WS_URL",
-    f"ws://localhost:{APP_PORT}",
+    f"ws://localhost:{FASTAPI_PORT}",
 )  # For WebSocket connections
 HEALTH_CHECK_URL = f"{API_BASE_URL}/health"
 
@@ -263,7 +263,7 @@ def build_deck_uploader_tab():
     deck_text_input = gr.Textbox(
         lines=10,
         label="Arena Export",  # guidance label
-        placeholder="4 Lightning Bolt (M11) 146\n2 Counterspell (MH2) 267",
+        placeholder="4 Lightning Bolt (M11) 146\\n2 Counterspell (MH2) 267",
     )
     format_dropdown = gr.Dropdown(
         choices=["Standard", "Pioneer", "Modern"],
@@ -285,8 +285,8 @@ def build_deck_uploader_tab():
 
     gr.Markdown("### Tips")
     tips_markdown = (
-        "* CSV uploads should come from the Steam Arena export.\n"
-        "* Text uploads should be the Arena clipboard format.\n"
+        "* CSV uploads should come from the Steam Arena export.\\n"
+        "* Text uploads should be the Arena clipboard format.\\n"
         "* The latest `deck_id` works across the Meta dashboard and chat tabs."
     )
     gr.Markdown(tips_markdown)
@@ -380,67 +380,6 @@ def build_meta_dashboard_tab():
         "Meta snapshots surface win-rates, while Smart Memory summarizes "
         "past conversations."
     )
-
-
-def validate_server_ready():
-    """Validate that the server components are properly initialized."""
-    try:
-        # Start uvicorn as a subprocess
-        process = subprocess.Popen(
-            [
-                sys.executable, "-m", "uvicorn",
-                "src.main:app",
-                "--host", "0.0.0.0",
-                "--port", str(FASTAPI_PORT),
-                "--log-level", "info",
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
-        )
-
-        logger.info("FastAPI server started with PID %s", process.pid)
-        return process
-    except (OSError, subprocess.SubprocessError) as exc:
-        logger.error("Failed to start FastAPI server: %s", exc)
-        raise
-
-
-async def wait_for_fastapi_ready(max_wait=60, check_interval=2):
-    """Wait for FastAPI server to be ready by checking health endpoint (async).
-    
-    Args:
-        max_wait: Maximum time to wait in seconds
-        check_interval: Time between health checks in seconds
-    
-    Returns:
-        bool: True if server is ready, False otherwise
-    """
-    logger.info("Waiting for FastAPI server to be ready...")
-    start_time = time.time()
-    
-    shared_client = await get_shared_client()
-    
-    while time.time() - start_time < max_wait:
-        try:
-            response = await shared_client.get(HEALTH_CHECK_URL, timeout=5.0)
-            if response.status_code == 200:
-                logger.info("FastAPI server is ready!")
-                return True
-        except (httpx.ConnectError, httpx.TimeoutException):
-            logger.info(
-                "Server not ready yet, waiting %s seconds...",
-                check_interval,
-            )
-            await asyncio.sleep(check_interval)
-        except httpx.HTTPError as exc:
-            logger.warning("Health check error: %s", exc)
-            await asyncio.sleep(check_interval)
-    
-    logger.error(
-        "FastAPI server did not become ready within %s seconds",
-        max_wait,
-    )
-    return False
 
 
 def check_environment():
@@ -756,56 +695,28 @@ def get_app():
 app = get_app()
 
 
+@fastapi_app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup resources on shutdown."""
+    if client:
+        await client.aclose()
+
+
 def main():
     """Main entry point for the Hugging Face Space."""
     logger.info("=" * 60)
     logger.info("Arena Improver - Hugging Face Space")
     logger.info("=" * 60)
-    
-    # Start FastAPI server
-    try:
-        fastapi_process = start_fastapi_server()
-    except (OSError, subprocess.SubprocessError) as exc:
-        logger.error("Failed to start FastAPI server: %s", exc)
-        sys.exit(1)
-    
-    # Wait for FastAPI to be ready
-    if not asyncio.run(wait_for_fastapi_ready(max_wait=60)):
-        logger.error("FastAPI server failed to start. Check logs above.")
-        fastapi_process.terminate()
-        try:
-            fastapi_process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            logger.warning(
-                "FastAPI process did not terminate gracefully; forcing kill",
-            )
-            fastapi_process.kill()
-            fastapi_process.wait()
-        sys.exit(1)
-    
-    # Create and launch Gradio interface
-    try:
-        logger.info("Creating Gradio interface...")
-        interface = create_gradio_interface()
-        
-        logger.info("Launching Gradio on port %s...", GRADIO_PORT)
-        logger.info("=" * 60)
-        
-        # Launch Gradio
-        interface.launch(
-            server_name="0.0.0.0",
-            server_port=GRADIO_PORT,
-            share=False,
-            show_error=True
-        )
-    except (OSError, RuntimeError) as exc:
-        logger.error("Failed to launch Gradio interface: %s", exc)
-        fastapi_process.kill()
-        sys.exit(1)
-    finally:
-        # Cleanup shared client
-        if client:
-            asyncio.run(client.aclose())
+    logger.info("Starting combined FastAPI + Gradio server on port %s", FASTAPI_PORT)
+    logger.info("=" * 60)
+
+    # Launch the combined app with uvicorn
+    uvicorn.run(
+        "app:app",
+        host="0.0.0.0",
+        port=FASTAPI_PORT,
+        log_level="info",
+    )
 
 
 if __name__ == "__main__":
