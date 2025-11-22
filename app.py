@@ -20,13 +20,15 @@ import sys
 import textwrap
 import uuid
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import gradio as gr
 from gradio import mount_gradio_app
 import httpx
 import uvicorn
 import websockets
+from PIL import Image
+import io
 
 import traceback
 
@@ -139,6 +141,329 @@ WS_BASE_URL = os.getenv(
     f"ws://localhost:{FASTAPI_PORT}",
 )  # For WebSocket connections
 HEALTH_CHECK_URL = f"{API_BASE_URL}/health"
+
+
+# -----------------------------------------------------------------------------
+# Dynamic Color Extraction Engine
+# -----------------------------------------------------------------------------
+
+def extract_palette_from_image(image_file) -> Tuple[str, str, str]:
+    """Extract 3 dominant colors from an uploaded image for dynamic theming.
+
+    Args:
+        image_file: Gradio file upload object or PIL Image
+
+    Returns:
+        Tuple of 3 hex color strings (primary, secondary, tertiary)
+    """
+    try:
+        # Handle different input types
+        if image_file is None:
+            return ("#00ff88", "#b744ff", "#ff4466")  # Default Phyrexian colors
+
+        # If it's a file path string
+        if isinstance(image_file, str):
+            img = Image.open(image_file)
+        # If it's a Gradio file object
+        elif hasattr(image_file, 'name'):
+            img = Image.open(image_file.name)
+        # If it's already a PIL Image
+        elif isinstance(image_file, Image.Image):
+            img = image_file
+        else:
+            return ("#00ff88", "#b744ff", "#ff4466")
+
+        # Resize for faster processing
+        img = img.resize((150, 150))
+        img = img.convert('RGB')
+
+        # Get pixel data
+        pixels = list(img.getdata())
+
+        # Simple color quantization - group similar colors
+        color_buckets = {}
+        for r, g, b in pixels:
+            # Reduce to 32 color levels per channel (5-bit)
+            key = (r // 32 * 32, g // 32 * 32, b // 32 * 32)
+            color_buckets[key] = color_buckets.get(key, 0) + 1
+
+        # Get top 3 most common colors
+        sorted_colors = sorted(color_buckets.items(), key=lambda x: x[1], reverse=True)
+
+        # Convert to hex and filter out very dark/light colors for better UI
+        dominant_colors = []
+        for (r, g, b), count in sorted_colors:
+            # Skip very dark (near black) and very light (near white) colors
+            brightness = (r + g + b) / 3
+            if 30 < brightness < 225:  # Mid-range colors only
+                hex_color = f"#{r:02x}{g:02x}{b:02x}"
+                dominant_colors.append(hex_color)
+
+            if len(dominant_colors) == 3:
+                break
+
+        # Ensure we have 3 colors
+        while len(dominant_colors) < 3:
+            dominant_colors.append("#00ff88")
+
+        logger.info(f"Extracted palette: {dominant_colors}")
+        return tuple(dominant_colors[:3])
+
+    except Exception as exc:
+        logger.error(f"Color extraction failed: {exc}")
+        return ("#00ff88", "#b744ff", "#ff4466")  # Fallback to default
+
+
+# -----------------------------------------------------------------------------
+# Custom Dark Theme CSS
+# -----------------------------------------------------------------------------
+
+VILLAIN_CSS = """
+/* Phyrexian Villain Command Center Theme */
+:root {
+    --bg-primary: #0a0a0f;
+    --bg-secondary: #1a1a2e;
+    --bg-tertiary: #16213e;
+    --accent-primary: #00ff88;
+    --accent-secondary: #b744ff;
+    --accent-tertiary: #ff4466;
+    --text-primary: #e0e0e0;
+    --text-secondary: #888899;
+    --border-color: #2a2a3e;
+    --glow-color: rgba(0, 255, 136, 0.6);
+}
+
+/* Global dark mode enforcement */
+body, .gradio-container {
+    background: var(--bg-primary) !important;
+    color: var(--text-primary) !important;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+}
+
+/* Glitch text animation for header */
+@keyframes glitch {
+    0% { transform: translate(0) }
+    20% { transform: translate(-2px, 2px) }
+    40% { transform: translate(-2px, -2px) }
+    60% { transform: translate(2px, 2px) }
+    80% { transform: translate(2px, -2px) }
+    100% { transform: translate(0) }
+}
+
+.villain-header {
+    background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+    border: 2px solid var(--accent-primary);
+    border-radius: 8px;
+    padding: 30px;
+    margin-bottom: 20px;
+    box-shadow: 0 0 30px var(--glow-color);
+    position: relative;
+    overflow: hidden;
+}
+
+.villain-header::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(0,255,136,0.1) 0%, transparent 70%);
+    animation: pulse 4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 0.8; }
+}
+
+.villain-title {
+    font-size: 3em;
+    font-weight: 900;
+    color: var(--accent-primary);
+    text-shadow: 0 0 20px var(--glow-color);
+    margin: 0;
+    letter-spacing: 2px;
+    animation: glitch 3s infinite;
+}
+
+.villain-subtitle {
+    font-size: 1.2em;
+    color: var(--text-secondary);
+    font-style: italic;
+    margin-top: 10px;
+    font-family: 'Courier New', monospace;
+}
+
+/* Pulsing glow button (CTA) */
+@keyframes button-glow {
+    0%, 100% {
+        box-shadow: 0 0 10px var(--accent-primary), 0 0 20px var(--accent-primary);
+    }
+    50% {
+        box-shadow: 0 0 20px var(--accent-primary), 0 0 40px var(--accent-primary), 0 0 60px var(--accent-primary);
+    }
+}
+
+.primary-action-btn {
+    background: linear-gradient(135deg, var(--accent-primary) 0%, #00dd77 100%) !important;
+    color: var(--bg-primary) !important;
+    font-weight: 700 !important;
+    border: none !important;
+    border-radius: 4px !important;
+    padding: 12px 24px !important;
+    font-size: 1.1em !important;
+    animation: button-glow 2s ease-in-out infinite !important;
+    cursor: pointer !important;
+    text-transform: uppercase !important;
+    letter-spacing: 1px !important;
+}
+
+/* All buttons dark theme */
+button {
+    background: var(--bg-tertiary) !important;
+    color: var(--text-primary) !important;
+    border: 1px solid var(--accent-secondary) !important;
+    border-radius: 4px !important;
+    padding: 10px 20px !important;
+    transition: all 0.3s ease !important;
+}
+
+button:hover {
+    background: var(--accent-secondary) !important;
+    color: white !important;
+    box-shadow: 0 0 15px rgba(183, 68, 255, 0.5) !important;
+}
+
+/* Input fields dark theme */
+input, textarea, select {
+    background: var(--bg-secondary) !important;
+    color: var(--text-primary) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 4px !important;
+    padding: 10px !important;
+}
+
+input:focus, textarea:focus, select:focus {
+    border-color: var(--accent-primary) !important;
+    box-shadow: 0 0 10px var(--glow-color) !important;
+    outline: none !important;
+}
+
+/* Monospace font for analysis outputs */
+.analysis-output, .chat-output, .deck-data {
+    font-family: 'Courier New', 'Monaco', monospace !important;
+    background: var(--bg-secondary) !important;
+    border: 1px solid var(--accent-primary) !important;
+    border-radius: 4px !important;
+    padding: 15px !important;
+    color: var(--accent-primary) !important;
+    line-height: 1.6 !important;
+}
+
+/* Tabs dark theme */
+.tab-nav button {
+    background: var(--bg-secondary) !important;
+    border-bottom: 2px solid transparent !important;
+}
+
+.tab-nav button.selected {
+    border-bottom-color: var(--accent-primary) !important;
+    color: var(--accent-primary) !important;
+}
+
+/* Cards and containers */
+.control-panel {
+    background: var(--bg-secondary) !important;
+    border: 1px solid var(--accent-secondary) !important;
+    border-radius: 8px !important;
+    padding: 20px !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5) !important;
+}
+
+.output-panel {
+    background: var(--bg-secondary) !important;
+    border: 1px solid var(--accent-primary) !important;
+    border-radius: 8px !important;
+    padding: 20px !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Chat interface terminal style */
+.chatbot {
+    background: var(--bg-primary) !important;
+    border: 1px solid var(--accent-primary) !important;
+    border-radius: 4px !important;
+    font-family: 'Courier New', monospace !important;
+}
+
+.chatbot .message {
+    background: var(--bg-secondary) !important;
+    border-left: 3px solid var(--accent-primary) !important;
+    padding: 10px !important;
+    margin: 5px 0 !important;
+}
+
+/* JSON outputs */
+.json-output {
+    background: var(--bg-primary) !important;
+    border: 1px solid var(--accent-secondary) !important;
+    border-radius: 4px !important;
+    padding: 15px !important;
+    font-family: 'Courier New', monospace !important;
+    font-size: 0.9em !important;
+    color: var(--accent-secondary) !important;
+}
+
+/* Footer */
+footer {
+    background: var(--bg-primary) !important;
+    border-top: 1px solid var(--border-color) !important;
+    color: var(--text-secondary) !important;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--accent-secondary);
+    border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--accent-primary);
+}
+
+/* Label styling */
+label {
+    color: var(--text-primary) !important;
+    font-weight: 600 !important;
+    margin-bottom: 8px !important;
+    display: block !important;
+}
+
+/* File upload area */
+.file-upload {
+    background: var(--bg-secondary) !important;
+    border: 2px dashed var(--accent-primary) !important;
+    border-radius: 8px !important;
+    padding: 20px !important;
+    text-align: center !important;
+    transition: all 0.3s ease !important;
+}
+
+.file-upload:hover {
+    border-color: var(--accent-secondary) !important;
+    background: var(--bg-tertiary) !important;
+}
+"""
 
 
 @dataclass
@@ -469,6 +794,79 @@ def build_meta_dashboard_tab():
     )
 
 
+@builder_registry(
+    name="theme_designer",
+    description="Dynamic color theme extraction",
+    endpoints=[],
+)
+def build_theme_designer_tab():
+    """Theme designer tab for dynamic color extraction from card art."""
+
+    gr.Markdown("## 🎨 Design Interface")
+    gr.Markdown(
+        "Upload an MTG card or any image to extract its dominant colors "
+        "and apply them to the interface theme."
+    )
+
+    theme_image = gr.Image(
+        label="Submit Visual Data",
+        type="filepath",
+        sources=["upload"],
+    )
+    extract_btn = gr.Button("Extract Color Palette", variant="primary", elem_classes=["primary-action-btn"])
+    palette_output = gr.JSON(label="Extracted Palette", value={})
+    theme_preview = gr.HTML(label="Theme Preview")
+
+    def handle_palette_extraction(image):
+        """Extract colors and generate preview HTML."""
+        color1, color2, color3 = extract_palette_from_image(image)
+
+        palette_data = {
+            "primary_accent": color1,
+            "secondary_accent": color2,
+            "tertiary_accent": color3,
+            "status": "Colors extracted successfully",
+            "note": "Colors will be applied to the interface dynamically (future enhancement)"
+        }
+
+        # Generate preview HTML
+        preview_html = f"""
+        <div style="padding: 20px; background: #1a1a2e; border-radius: 8px;">
+            <h3 style="color: #e0e0e0; margin-bottom: 15px;">Color Palette Preview</h3>
+            <div style="display: flex; gap: 20px; justify-content: center;">
+                <div style="text-align: center;">
+                    <div style="width: 120px; height: 120px; background: {color1};
+                         border-radius: 8px; box-shadow: 0 0 20px {color1};"></div>
+                    <p style="color: #888; margin-top: 10px; font-family: monospace;">PRIMARY<br/>{color1}</p>
+                </div>
+                <div style="text-align: center;">
+                    <div style="width: 120px; height: 120px; background: {color2};
+                         border-radius: 8px; box-shadow: 0 0 20px {color2};"></div>
+                    <p style="color: #888; margin-top: 10px; font-family: monospace;">SECONDARY<br/>{color2}</p>
+                </div>
+                <div style="text-align: center;">
+                    <div style="width: 120px; height: 120px; background: {color3};
+                         border-radius: 8px; box-shadow: 0 0 20px {color3};"></div>
+                    <p style="color: #888; margin-top: 10px; font-family: monospace;">TERTIARY<br/>{color3}</p>
+                </div>
+            </div>
+        </div>
+        """
+
+        return palette_data, preview_html
+
+    extract_btn.click(
+        fn=handle_palette_extraction,
+        inputs=theme_image,
+        outputs=[palette_output, theme_preview],
+    )
+
+    gr.Markdown(
+        "*Note: Dynamic theme application requires JavaScript injection and will be "
+        "enhanced in future versions. Current implementation extracts and displays colors.*"
+    )
+
+
 def check_environment():
     """Check required environment variables and return HTML summary."""
     env_status = {}
@@ -519,21 +917,35 @@ def check_environment():
 
 
 def create_gradio_interface():
-    """Create the Gradio interface with tabs."""
+    """Create the gamified Gradio interface with villain theme."""
 
-    # About content with Vawlrath's personality
+    # Custom villain header with glitch effect
+    villain_header_html = """
+    <div class="villain-header">
+        <div style="position: relative; z-index: 1;">
+            <h1 class="villain-title">⚡ VAWLRATHH ⚡</h1>
+            <p class="villain-subtitle">
+                &gt;&gt; Your deck's terrible. Let me show you how to fix it. &lt;&lt;
+            </p>
+            <p style="color: #888899; font-size: 0.9em; margin-top: 15px; font-family: monospace;">
+                [ SYSTEM STATUS: OPERATIONAL | AI CORES: ONLINE | THREAT LEVEL: MAXIMUM ]
+            </p>
+        </div>
+    </div>
+    """
+
+    # About content with enhanced dark theme
     about_html = textwrap.dedent(
         f"""
-<div style="padding: 20px;">
-    <h1>Vawlrathh</h1>
-    <p style="font-style: italic; color: #666;">
+<div style="padding: 20px; background: #1a1a2e; border-radius: 8px; color: #e0e0e0;">
+    <h2 style="color: #00ff88;">🎯 MISSION BRIEFING</h2>
+    <p style="font-style: italic; color: #888899; border-left: 3px solid #00ff88; padding-left: 15px;">
         "Your deck's terrible. Let me show you how to fix it."<br/>
-        — <strong>Vawlrathh, The Small'n</strong>
+        — <strong style="color: #b744ff;">Vawlrathh, The Small'n</strong>
     </p>
 
-    <h2>🎯 What This Is</h2>
     <p>
-        Listen up. I'm <strong>Vawlrathh, The Small'n</strong>—a pint-sized,
+        Listen up. I'm <strong style="color: #00ff88;">Vawlrathh, The Small'n</strong>—a pint-sized,
         sharp-tongued version of Volrath, The Fallen. Despite my stature, I
         know MTG Arena better than you know your own deck (which, frankly,
         isn't saying much).
@@ -546,33 +958,43 @@ def create_gradio_interface():
         you at FNM.
     </p>
 
-    <h3>What Makes This Not-Garbage</h3>
-    <ul>
-        <li><strong>Physical Card Prices:</strong> Shows you what your Arena
-        deck costs in real cardboard</li>
-        <li><strong>Real-Time Strategy Chat:</strong> Talk to me via WebSocket.
-        I'll tell you the truth</li>
-        <li><strong>AI Consensus Checking:</strong> Two AI brains so you don't
-        get bad advice</li>
-        <li><strong>Sequential Reasoning:</strong> Breaks down complex
-        decisions into steps you can follow</li>
-        <li><strong>Full MCP Integration:</strong> Memory, sequential thinking,
-        omnisearch—the works</li>
+    <h3 style="color: #b744ff;">⚡ CORE CAPABILITIES</h3>
+    <ul style="list-style-type: none; padding-left: 0;">
+        <li style="padding: 8px 0; border-bottom: 1px solid #2a2a3e;">
+            <strong style="color: #00ff88;">▸ Physical Card Prices:</strong>
+            Shows you what your Arena deck costs in real cardboard
+        </li>
+        <li style="padding: 8px 0; border-bottom: 1px solid #2a2a3e;">
+            <strong style="color: #00ff88;">▸ Real-Time Strategy Chat:</strong>
+            Talk to me via WebSocket. I'll tell you the truth
+        </li>
+        <li style="padding: 8px 0; border-bottom: 1px solid #2a2a3e;">
+            <strong style="color: #00ff88;">▸ AI Consensus Checking:</strong>
+            Two AI brains so you don't get bad advice
+        </li>
+        <li style="padding: 8px 0; border-bottom: 1px solid #2a2a3e;">
+            <strong style="color: #00ff88;">▸ Sequential Reasoning:</strong>
+            Breaks down complex decisions into steps you can follow
+        </li>
+        <li style="padding: 8px 0;">
+            <strong style="color: #00ff88;">▸ Full MCP Integration:</strong>
+            Memory, sequential thinking, omnisearch—the works
+        </li>
     </ul>
 
-    <h3>🎖️ MCP 1st Birthday Hackathon</h3>
+    <h3 style="color: #b744ff; margin-top: 30px;">🎖️ MCP 1st Birthday Hackathon</h3>
     <p>
         This project is submitted for the
         <strong>MCP 1st Birthday Hackathon</strong>. Visit the
-        <a href="https://huggingface.co/MCP-1st-Birthday" target="_blank">
+        <a href="{HACKATHON_URL}" target="_blank" style="color: #00ff88;">
             hackathon page
         </a>
         to see more MCP-powered projects.
     </p>
 
-    <p style="margin-top: 30px; color: #666;">
-        <strong>Repository:</strong>
-        <a href="{REPO_URL}" target="_blank">
+    <p style="margin-top: 30px; color: #888899; font-family: monospace;">
+        <strong>REPOSITORY:</strong>
+        <a href="{REPO_URL}" target="_blank" style="color: #b744ff;">
             github.com/clduab11/vawlrathh
         </a>
     </p>
@@ -580,80 +1002,52 @@ def create_gradio_interface():
         """
     )
 
-    # Quick Start instructions
+    # Quick Start with dark theme
     quick_start_html = textwrap.dedent(
         f"""
-<div style="padding: 20px;">
-    <h2>🚀 Quick Start Guide</h2>
+<div style="padding: 20px; background: #1a1a2e; border-radius: 8px; color: #e0e0e0;">
+    <h2 style="color: #00ff88;">🚀 INITIALIZATION PROTOCOL</h2>
 
-    <h3>Using the API</h3>
+    <h3 style="color: #b744ff;">Using the API</h3>
     <p>
         The FastAPI server is running and accessible through the
         <strong>API Documentation</strong> tab. You can explore all available
         endpoints, try them out directly, and see example responses.
     </p>
 
-    <h3>Key Endpoints</h3>
-    <ul>
-        <li>
-            <strong>POST /api/v1/upload/csv</strong> - Upload a deck from Steam
-            Arena CSV export
+    <h3 style="color: #b744ff;">Key Endpoints</h3>
+    <ul style="font-family: 'Courier New', monospace; font-size: 0.9em;">
+        <li style="padding: 5px 0;">
+            <strong style="color: #00ff88;">POST /api/v1/upload/csv</strong> - Upload deck from Steam Arena CSV
         </li>
-        <li>
-            <strong>POST /api/v1/upload/text</strong> - Upload a deck from
-            Arena text format
+        <li style="padding: 5px 0;">
+            <strong style="color: #00ff88;">POST /api/v1/upload/text</strong> - Upload deck from Arena text format
         </li>
-        <li>
-            <strong>POST /api/v1/analyze/{{deck_id}}</strong>
-            - Analyze a deck's strengths and weaknesses
+        <li style="padding: 5px 0;">
+            <strong style="color: #00ff88;">POST /api/v1/analyze/{{deck_id}}</strong> - Analyze deck composition
         </li>
-        <li>
-            <strong>POST /api/v1/optimize/{{deck_id}}</strong>
-            - Get AI-powered optimization suggestions
+        <li style="padding: 5px 0;">
+            <strong style="color: #00ff88;">POST /api/v1/optimize/{{deck_id}}</strong> - Get AI-powered suggestions
         </li>
-        <li>
-            <strong>GET /api/v1/purchase/{{deck_id}}</strong>
-            - Get physical card purchase information
+        <li style="padding: 5px 0;">
+            <strong style="color: #00ff88;">GET /api/v1/purchase/{{deck_id}}</strong> - Physical card pricing
         </li>
-        <li>
-            <strong>WebSocket /api/v1/ws/chat/{{user_id}}</strong>
-            - Chat with Vawlrathh in real-time
+        <li style="padding: 5px 0;">
+            <strong style="color: #00ff88;">WebSocket /api/v1/ws/chat/{{user_id}}</strong> - Real-time strategy chat
         </li>
     </ul>
 
-    <h3>Example Workflow</h3>
-    <ol>
+    <h3 style="color: #b744ff; margin-top: 20px;">Example Workflow</h3>
+    <ol style="line-height: 1.8;">
         <li>Export your deck from Arena as CSV or text</li>
-        <li>Upload it using the <code>/api/v1/upload/csv</code> or
-        <code>/api/v1/upload/text</code> endpoint</li>
-        <li>Get the returned <code>deck_id</code></li>
-        <li>Analyze it with <code>/api/v1/analyze/{{deck_id}}</code></li>
-        <li>Get optimization suggestions with
-        <code>/api/v1/optimize/{{deck_id}}</code></li>
-        <li>Check physical card prices with
-        <code>/api/v1/purchase/{{deck_id}}</code></li>
+        <li>Upload it using <code style="background: #0a0a0f; padding: 2px 6px; border-radius: 3px; color: #00ff88;">/api/v1/upload/csv</code></li>
+        <li>Retrieve the returned <code style="background: #0a0a0f; padding: 2px 6px; border-radius: 3px; color: #00ff88;">deck_id</code></li>
+        <li>Analyze with <code style="background: #0a0a0f; padding: 2px 6px; border-radius: 3px; color: #00ff88;">/api/v1/analyze/{{deck_id}}</code></li>
+        <li>Get optimization suggestions</li>
+        <li>Check physical card prices</li>
     </ol>
 
-    <h3>WebSocket Chat</h3>
-    <p>
-        Connect to <code>ws://this-space-url/api/v1/ws/chat/your_user_id</code>
-        to chat with me in real-time. Send JSON messages like:
-    </p>
-    <pre><code>{{
-    "type": "chat",
-    "message": "How do I beat control decks?",
-    "context": {{"deck_id": 1}}
-}}</code></pre>
-
-    <h3>Need Help?</h3>
-    <p>
-        Check the full documentation at
-        <a href="{REPO_URL}" target="_blank">
-            GitHub Repository
-        </a>
-    </p>
-
-    <p style="margin-top: 30px; font-style: italic; color: #666;">
+    <p style="margin-top: 30px; font-style: italic; color: #888899; border-left: 3px solid #b744ff; padding-left: 15px;">
         "If you have to ask, your deck probably needs more removal."<br/>
         — Vawlrathh
     </p>
@@ -664,49 +1058,208 @@ def create_gradio_interface():
     # Environment status
     env_status_html = check_environment()
 
-    # Create the interface with tabs
+    # Create the interface with dark theme and custom CSS
     with gr.Blocks(
-        title="Vawlrathh - Deck Analysis",
+        title="Vawlrathh - Command Center",
+        css=VILLAIN_CSS,
+        theme=gr.themes.Base(
+            primary_hue="emerald",
+            secondary_hue="purple",
+            neutral_hue="slate",
+        ).set(
+            body_background_fill="#0a0a0f",
+            body_background_fill_dark="#0a0a0f",
+            background_fill_primary="#1a1a2e",
+            background_fill_primary_dark="#1a1a2e",
+            background_fill_secondary="#16213e",
+            background_fill_secondary_dark="#16213e",
+            border_color_primary="#00ff88",
+            border_color_primary_dark="#00ff88",
+        ),
     ) as interface:
-        gr.Markdown("# Vawlrathh, The Small'n")
-        gr.Markdown("*Your deck's terrible. Let me show you how to fix it.*")
+        # Custom villain header
+        gr.HTML(villain_header_html)
 
         with gr.Tabs():
-            with gr.Tab("API Documentation"):
+            # Dashboard Tab - 2 Column Layout
+            with gr.Tab("⚡ Command Center"):
+                gr.Markdown("## Deck Analysis Command Center")
+
+                with gr.Row():
+                    # LEFT COLUMN - Control Panel (30%)
+                    with gr.Column(scale=3, elem_classes=["control-panel"]):
+                        gr.Markdown("### 🎮 CONTROL PANEL")
+
+                        # Deck upload section
+                        gr.Markdown("#### Submit Deck Data")
+                        deck_id_state = gr.State(value=None)
+                        deck_id_display = gr.Number(
+                            label="Active Deck ID",
+                            interactive=False,
+                            elem_classes=["deck-data"]
+                        )
+
+                        csv_input = gr.File(
+                            file_types=[".csv"],
+                            label="CSV Upload",
+                            elem_classes=["file-upload"]
+                        )
+                        csv_upload_btn = gr.Button(
+                            "📤 Upload CSV",
+                            variant="primary",
+                            elem_classes=["primary-action-btn"]
+                        )
+
+                        gr.Markdown("---")
+
+                        deck_text_input = gr.Textbox(
+                            lines=8,
+                            label="Arena Text Export",
+                            placeholder="4 Lightning Bolt\\n2 Counterspell\\n...",
+                            elem_classes=["analysis-output"]
+                        )
+                        format_dropdown = gr.Dropdown(
+                            choices=["Standard", "Pioneer", "Modern"],
+                            value="Standard",
+                            label="Game Format",
+                        )
+                        text_upload_btn = gr.Button(
+                            "📤 Upload Text",
+                            variant="secondary"
+                        )
+
+                        upload_status = gr.JSON(
+                            label="Upload Status",
+                            value={},
+                            elem_classes=["json-output"]
+                        )
+
+                        # CSV upload handler
+                        async def handle_csv_upload(uploaded_file, previous_id):
+                            file_path = getattr(uploaded_file, "name", None)
+                            payload = await _upload_csv_to_api(file_path)
+                            deck_id = payload.get("deck_id") or previous_id
+                            return payload, deck_id, deck_id
+
+                        csv_upload_btn.click(
+                            fn=handle_csv_upload,
+                            inputs=[csv_input, deck_id_state],
+                            outputs=[upload_status, deck_id_state, deck_id_display],
+                        )
+
+                        # Text upload handler
+                        async def handle_text_upload(deck_text, fmt, previous_id):
+                            payload = await _upload_text_to_api(deck_text, fmt)
+                            deck_id = payload.get("deck_id") or previous_id
+                            return payload, deck_id, deck_id
+
+                        text_upload_btn.click(
+                            fn=handle_text_upload,
+                            inputs=[deck_text_input, format_dropdown, deck_id_state],
+                            outputs=[upload_status, deck_id_state, deck_id_display],
+                        )
+
+                    # RIGHT COLUMN - Output Panel (70%)
+                    with gr.Column(scale=7, elem_classes=["output-panel"]):
+                        gr.Markdown("### 📊 ANALYSIS OUTPUT")
+
+                        # Chat interface
+                        gr.Markdown("#### Strategic Consultation")
+                        connection_status = gr.JSON(
+                            label="WebSocket Status",
+                            value={},
+                            elem_classes=["json-output"]
+                        )
+                        chatbot = gr.Chatbot(
+                            label="Vawlrathh's Analysis",
+                            elem_classes=["chatbot", "chat-output"],
+                            height=400
+                        )
+                        chat_history_state = gr.State(value=[])
+
+                        with gr.Row():
+                            message_box = gr.Textbox(
+                                label="Query",
+                                lines=2,
+                                placeholder="Ask Vawlrathh how to optimize your deck...",
+                                scale=4,
+                                elem_classes=["analysis-output"]
+                            )
+                            send_btn = gr.Button(
+                                "⚡ ANALYZE",
+                                variant="primary",
+                                elem_classes=["primary-action-btn"],
+                                scale=1
+                            )
+
+                        connect_btn = gr.Button("🔌 Test WebSocket", variant="secondary")
+
+                        connect_btn.click(
+                            fn=_check_chat_websocket,
+                            outputs=connection_status,
+                        )
+
+                        def queue_message(history, message, deck_id):
+                            history = history or []
+                            if not message or not message.strip():
+                                return history, "", history
+
+                            context_note = (
+                                f"Deck ID {int(deck_id)} loaded" if deck_id
+                                else "No deck context provided"
+                            )
+                            summary = f"[QUEUED] {context_note}"
+                            history.append((message.strip(), summary))
+                            return history, "", history
+
+                        send_btn.click(
+                            fn=queue_message,
+                            inputs=[chat_history_state, message_box, deck_id_state],
+                            outputs=[chatbot, message_box, chat_history_state],
+                        )
+
+            # Design Interface Tab
+            with gr.Tab("🎨 Theme Designer"):
+                build_theme_designer_tab()
+
+            # Meta Intelligence Tab
+            with gr.Tab("📈 Meta Intelligence"):
+                build_meta_dashboard_tab()
+
+            # API Documentation Tab
+            with gr.Tab("📡 API Docs"):
                 docs_markdown = textwrap.dedent(
                     """
                     ### Interactive API Documentation
                     Use the embedded Swagger UI below to explore and test the
                     available API endpoints. Expand any route and select
-                    "Try it out" to make test requests directly from the
-                    browser.
-
-                    **Note:** API documentation is available at `/docs` on the
-                    same port as this interface.
+                    "Try it out" to make test requests directly from the browser.
                     """
                 )
                 gr.Markdown(docs_markdown)
 
-                # Use /docs directly since FastAPI and Gradio are on the same port
                 iframe_html = textwrap.dedent(
                     """
                     <iframe
                         src="/docs"
                         width="100%"
                         height="800px"
-                        style="border: 1px solid #ccc; border-radius: 4px;">
+                        style="border: 1px solid #00ff88; border-radius: 8px; background: #1a1a2e;">
                     </iframe>
                     """
                 )
                 gr.HTML(iframe_html)
 
-            with gr.Tab("About"):
+            # About Tab
+            with gr.Tab("ℹ️ About"):
                 gr.HTML(about_html)
 
-            with gr.Tab("Quick Start"):
+            # Quick Start Tab
+            with gr.Tab("🚀 Quick Start"):
                 gr.HTML(quick_start_html)
 
-            with gr.Tab("Status"):
+            # Status Tab
+            with gr.Tab("⚙️ System Status"):
                 gr.HTML(env_status_html)
                 troubleshooting_md = textwrap.dedent(
                     f"""
@@ -724,29 +1277,22 @@ def create_gradio_interface():
                     """
                 )
                 gr.Markdown(troubleshooting_md)
-            
-            with gr.Tab("GPU Status"):
+
+            # GPU Status Tab
+            with gr.Tab("🎮 GPU Status"):
                 build_gpu_status_tab()
 
-            with gr.Tab("Deck Uploads"):
-                build_deck_uploader_tab()
-
-            with gr.Tab("Chat"):
-                build_chat_ui_tab()
-
-            with gr.Tab("Meta Intelligence"):
-                build_meta_dashboard_tab()
-
+        # Footer
         footer_md = textwrap.dedent(
             f"""
             ---
-            <p style="text-align: center; color: #666; font-size: 0.9em;">
-                Diminutive in size, not in strategic prowess. |
-                <a href="{REPO_URL}" target="_blank">
+            <p style="text-align: center; color: #888899; font-size: 0.9em; font-family: monospace;">
+                [ DIMINUTIVE IN SIZE, NOT IN STRATEGIC PROWESS ] |
+                <a href="{REPO_URL}" target="_blank" style="color: #00ff88;">
                     GitHub Repository
                 </a>
                 |
-                <a href="{HACKATHON_URL}" target="_blank">
+                <a href="{HACKATHON_URL}" target="_blank" style="color: #b744ff;">
                     MCP 1st Birthday Hackathon
                 </a>
             </p>

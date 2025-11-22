@@ -36,6 +36,9 @@ pytest-asyncio==1.2.0
 python-dotenv==1.0.1
 psutil==6.1.0
 
+# Image processing
+Pillow==11.0.0
+
 # Hugging Face Space Integration
 gradio>=5.0.0
 huggingface-hub<1.0
